@@ -8,7 +8,7 @@ Memly — приложение для обучения с карточками, 
 
 ## Посмотреть и запустить прототип
 
-Прототип: https://memly-design-preview.ochre-plum-9535.chatgpt.site (приватный просмотр владельцем).
+Прототип: https://memly-design-preview.warmaksimus7.chatgpt.site (приватный просмотр владельцем).
 
 Нужны Node.js 24 и pnpm 11.25.0. В корне репозитория:
 
