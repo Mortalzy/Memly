@@ -4,6 +4,19 @@
   "private": true,
   "description": "Flashcards, study modes, tests and learning games",
   "type": "module",
+  "packageManager": "pnpm@11.25.0",
+  "scripts": {
+    "dev": "pnpm --filter @memly/web dev",
+    "build": "pnpm --filter @memly/web build",
+    "preview": "pnpm --filter @memly/web preview",
+    "typecheck": "pnpm --filter @memly/web typecheck",
+    "test": "pnpm --filter @memly/web test",
+    "format": "prettier --write apps/web package.json docs/prototype.md .openai/hosting.json",
+    "format:check": "prettier --check apps/web package.json docs/prototype.md .openai/hosting.json"
+  },
+  "devDependencies": {
+    "prettier": "3.6.2"
+  },
   "engines": {
     "node": ">=24 <25"
   }
