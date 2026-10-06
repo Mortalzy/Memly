@@ -1,0 +1,10 @@
+{
+  "name": "memly",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Flashcards, study modes, tests and learning games",
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  }
+}
