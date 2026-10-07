@@ -4,13 +4,13 @@
   "private": true,
   "description": "Flashcards, study modes, tests and learning games",
   "type": "module",
-  "packageManager": "pnpm@11.25.0",
+  "packageManager": "npm@11.9.0",
   "scripts": {
-    "dev": "pnpm --filter @memly/web dev",
-    "build": "pnpm --filter @memly/web build",
-    "preview": "pnpm --filter @memly/web preview",
-    "typecheck": "pnpm --filter @memly/web typecheck",
-    "test": "pnpm --filter @memly/web test",
+    "dev": "npm run dev --workspace=@memly/web",
+    "build": "npm run build --workspace=@memly/web",
+    "preview": "npm run preview --workspace=@memly/web",
+    "typecheck": "npm run typecheck --workspace=@memly/web",
+    "test": "npm run test --workspace=@memly/web",
     "format": "prettier --write apps/web package.json docs/prototype.md .openai/hosting.json",
     "format:check": "prettier --check apps/web package.json docs/prototype.md .openai/hosting.json"
   },
@@ -18,6 +18,11 @@
     "prettier": "3.6.2"
   },
   "engines": {
-    "node": ">=24 <25"
-  }
+    "node": ">=24 <25",
+    "npm": ">=11 <12"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
 }

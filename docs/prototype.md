@@ -5,17 +5,15 @@
 
 ## Запуск
 
-Нужны Node.js 24 и pnpm 11.25.0. Из корня репозитория:
+Нужны Node.js 24 и npm 11 (npm поставляется вместе с Node.js). Из корня репозитория:
 
 ```bash
-corepack enable
-corepack prepare pnpm@11.25.0 --activate
-pnpm install --frozen-lockfile
-pnpm dev
+npm ci
+npm run dev
 ```
 
 Откройте адрес Vite из терминала (обычно http://localhost:5173).
-Для production-сборки: `pnpm build`; для локального просмотра сборки: `pnpm preview`.
+Для production-сборки: `npm run build`; для локального просмотра сборки: `npm run preview`.
 Сборка находится в `dist/` корня репозитория. Её можно разместить на статическом хостинге.
 
 ## Что можно посмотреть
@@ -51,10 +49,10 @@ CSS содержит общие цветовые токены. Контракт�
 Маршруты на hash поддерживают открытие отдельных экранов и кнопки браузера без серверного fallback.
 
 ```bash
-pnpm typecheck
-pnpm format:check
-pnpm test
-pnpm build
+npm run typecheck
+npm run format:check
+npm test
+npm run build
 ```
 
 Тесты поведения выполняются в DOM-окружении и проверяют переходы, карточки,

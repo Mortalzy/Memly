@@ -10,17 +10,15 @@ Memly — приложение для обучения с карточками, 
 
 Прототип: https://memly-design-preview.warmaksimus7.chatgpt.site (приватный просмотр владельцем).
 
-Нужны Node.js 24 и pnpm 11.25.0. В корне репозитория:
+Нужны Node.js 24 и npm 11 (npm поставляется вместе с Node.js). В корне репозитория:
 
 ```bash
-corepack enable
-corepack prepare pnpm@11.25.0 --activate
-pnpm install --frozen-lockfile
-pnpm dev
+npm ci
+npm run dev
 ```
 
-Откройте адрес Vite в терминале. `pnpm build` создаёт статический `dist/`; `pnpm preview` позволяет посмотреть сборку.
-Проверки: `pnpm typecheck`, `pnpm format:check`, `pnpm test`.
+Откройте адрес Vite в терминале. `npm run build` создаёт статический `dist/`; `npm run preview` позволяет посмотреть сборку.
+Проверки: `npm run typecheck`, `npm run format:check`, `npm test`.
 Демонстрационные изменения сбрасываются при обновлении страницы; итог теста и статистика — примеры оформления.
 [Все экраны, границы и структура прототипа](docs/prototype.md).
 
@@ -40,13 +38,13 @@ pnpm dev
 - Express 5, REST API, Better Auth с серверными сессиями.
 - PostgreSQL 18 + Drizzle ORM + Drizzle Kit; драйвер `pg`.
 - FSRS через `ts-fsrs` для интервальных повторений.
-- pnpm workspaces, ESLint, Prettier, GitHub Actions.
+- npm workspaces, ESLint, Prettier, GitHub Actions.
 - Vitest, React Testing Library, MSW, Supertest, Testcontainers, Playwright.
 - Docker Compose для разработки, Docker + Caddy для целевого развёртывания.
 
 По мере появления соответствующих функций добавляются Redis + BullMQ, Socket.IO, S3-совместимое хранилище, Tiptap + KaTeX и PWA с IndexedDB. Эти сервисы не нужны для текущей документационной инициализации.
 
-Зависимости фронтенд-прототипа и pnpm уже зафиксированы в манифестах и `pnpm-lock.yaml`. Остальной стек подключается по плану при реализации приложения.
+Зависимости фронтенд-прототипа и npm уже зафиксированы в манифестах и `package-lock.json`. Остальной стек подключается по плану при реализации приложения.
 
 ## Структура
 

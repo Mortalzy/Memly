@@ -28,7 +28,7 @@
 
 ## E1: рабочий фундамент
 
-1. Зафиксировать версии Node, pnpm и зависимостей, создать lockfile.
+1. Зафиксировать версии Node, npm и зависимостей, создать lockfile.
 2. Подготовить приложения web/api, строгий TypeScript и общие пакеты контрактов/данных.
 3. Настроить ESLint, Prettier, команды `dev`, `build`, `typecheck`, `lint`, `format:check`, `test` и GitHub Actions.
 4. Создать Docker Compose для PostgreSQL; добавить первую миграцию и демонстрационные данные.
