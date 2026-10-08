@@ -88,13 +88,21 @@ test('connected editor persists via API and preserves a draft on revision confli
         target: { value: `Answer ${i}` },
       });
     }
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить списком' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Вставьте список' }), {
+      target: { value: Array.from({ length: 50 }, (_, i) => `Word${i} Перевод ${i}`).join('\n') },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить 50 карточек' }));
+    assert.equal(writes.length, 0);
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить набор' }));
     await screen.findByRole('heading', { name: 'Настоящий набор' });
     assert.equal(writes.length, 1);
     assert.equal(writes[0].visibility, 'private');
     assert.equal(writes[0].folderId, null);
     assert.equal(writes[0].cards[0].id, undefined);
-    assert.equal(decks[0].cards.length, 2);
+    assert.equal(decks[0].cards.length, 52);
+    assert.equal(writes[0].cards[51].term, 'Word49');
+    assert.ok(writes[0].cards.every((card) => card.id === undefined));
     fireEvent.click(screen.getByRole('button', { name: 'Редактировать' }));
     await screen.findByRole('heading', { name: 'Редактирование набора' });
     fireEvent.change(screen.getByRole('textbox', { name: 'Название набора' }), {

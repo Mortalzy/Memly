@@ -171,3 +171,41 @@ export const cardCount = (count: number): string =>
   countLabel(count, ['карточка', 'карточки', 'карточек']);
 export const deckCount = (count: number): string =>
   countLabel(count, ['набор', 'набора', 'наборов']);
+
+export const bulkImportText = {
+  open: 'Добавить списком',
+  title: 'Добавить карточки списком',
+  hint: 'Одна строка — одна карточка. Проверьте результат перед добавлением.',
+  separator: 'Разделитель слова и перевода',
+  space: 'Пробел',
+  tab: 'Табуляция',
+  semicolon: 'Точка с запятой',
+  separatorHints: {
+    space: 'Разделяем по первому пробелу. Для словосочетаний используйте табуляцию.',
+    tab: 'Разделяем по первой табуляции. Можно вставить два столбца из таблицы.',
+    semicolon: 'Разделяем по первой точке с запятой: Take your time;Не торопись.',
+  },
+  input: 'Вставьте список',
+  placeholder: 'Apple Яблоко\nQiwi Киви\nCherry Вишня',
+  preview: 'Предпросмотр',
+  previewLimit: 'Показаны первые 500 строк. Сократите список перед добавлением.',
+  term: 'Слово',
+  definition: 'Перевод',
+  empty: 'Вставьте список слева — здесь появятся будущие карточки.',
+  appendHint:
+    'Карточки добавятся к текущему набору. Заполненные строки останутся. Затем сохраните набор.',
+  notReady: 'Проверьте список перед добавлением',
+  issues: {
+    missingPair: 'Нужны слово и перевод, разделённые выбранным символом.',
+    termTooLong: 'Слово длиннее 2000 символов.',
+    definitionTooLong: 'Перевод длиннее 5000 символов.',
+  },
+  lines: (count: number) => countLabel(count, ['строка', 'строки', 'строк']),
+  capacity: (count: number) => `Можно добавить ещё: ${cardCount(count)}. Лимит набора — 500.`,
+  limit: (count: number) => `Превышен лимит набора. Можно добавить ещё: ${cardCount(count)}.`,
+  invalid: (count: number) => `Исправьте строки с ошибками (${count}), чтобы добавить весь список.`,
+  ready: (count: number) => `Готово к добавлению: ${cardCount(count)}`,
+  add: (count: number) => `Добавить ${countLabel(count, ['карточку', 'карточки', 'карточек'])}`,
+  added: (count: number) =>
+    `Добавлено: ${cardCount(count)}. Сохраните набор, чтобы записать изменения.`,
+} as const;

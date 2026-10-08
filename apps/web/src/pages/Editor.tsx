@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, ListPlus, Plus, Trash2 } from 'lucide-react';
 import type { Card, Deck, Folder } from '../entities/deck';
 import { PageHeading } from '../shared/ui';
-import { ru } from '../shared/ru';
+import { bulkImportText, ru } from '../shared/ru';
 import { errorMessage } from '../shared/api';
+import { BulkImportDialog } from '../features/BulkImportDialog';
+import { retainedDraftCards } from '../features/bulk-import';
 
 export function Editor({
   deck,
@@ -28,6 +30,8 @@ export function Editor({
   );
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importNotice, setImportNotice] = useState('');
   const [visibility, setVisibility] = useState(deck?.visibility ?? 'private');
   const [folder, setFolder] = useState(deck?.folder ?? '');
   const [termLanguage, setTermLanguage] = useState(deck?.termLanguage ?? 'en');
@@ -148,9 +152,24 @@ export function Editor({
           </div>
         </section>
         <div className="section-heading">
-          <h2>{ru.cards}</h2>
-          <span className="muted">{cards.length}</span>
+          <h2>
+            {ru.cards} <span className="muted">({cards.length})</span>
+          </h2>
+          <button
+            type="button"
+            className="secondary"
+            disabled={pending}
+            onClick={() => setImportOpen(true)}
+          >
+            <ListPlus size={18} aria-hidden="true" />
+            {bulkImportText.open}
+          </button>
         </div>
+        {importNotice && (
+          <p className="import-result" role="status">
+            {importNotice}
+          </p>
+        )}
         <div className="editor-cards">
           {cards.map((card, i) => (
             <section className="panel editor-card" key={card.id}>
@@ -215,6 +234,25 @@ export function Editor({
           </button>
         </div>
       </form>
+      {importOpen && (
+        <BulkImportDialog
+          existingCount={retainedDraftCards(cards).length}
+          onClose={() => setImportOpen(false)}
+          onAdd={(rows) => {
+            setCards((items) => [
+              ...retainedDraftCards(items),
+              ...rows.map(({ term, definition }) => ({
+                id: crypto.randomUUID(),
+                term,
+                definition,
+              })),
+            ]);
+            setImportNotice(bulkImportText.added(rows.length));
+            setError('');
+            setImportOpen(false);
+          }}
+        />
+      )}
     </>
   );
 }
