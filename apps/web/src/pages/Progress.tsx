@@ -3,6 +3,8 @@ import { Flame, ArrowRight, Check } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import type { Deck } from '../entities/deck';
 import { PageHeading, ProgressBar, Stats, Symbol } from '../shared/ui';
+import { StudyHistory } from '../features/StudyHistory';
+import type { StudyHistoryItem } from '@memly/contracts';
 import { ru } from '../shared/ru';
 
 const days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -11,17 +13,19 @@ export function Progress({
   open,
   live = false,
   stats,
+  openSession,
 }: {
   decks: Deck[];
   open: (id: string) => void;
   live?: boolean;
   stats?: import('@memly/contracts').ProgressDto;
+  openSession?: (item: StudyHistoryItem) => void;
 }) {
   const [month, setMonth] = useState(false);
   if (live)
     return (
       <>
-        <PageHeading title={ru.progress} subtitle="Ваш прогресс в режиме карточек" />
+        <PageHeading title={ru.progress} subtitle="Ваш прогресс во всех режимах обучения" />
         <section className="panel settings-panel">
           <p>
             {stats
@@ -29,6 +33,7 @@ export function Progress({
               : 'Загружаем прогресс…'}
           </p>
         </section>
+        {openSession && <StudyHistory open={openSession} />}
         <div className="panel progress-list">
           {decks.map((deck) => (
             <button key={deck.id} onClick={() => open(deck.id)}>

@@ -151,7 +151,15 @@ export function Workspace({ backend }: { backend?: Backend }) {
     );
   else if (route.page === 'progress')
     content = (
-      <Progress decks={decks} open={openDeck} live={Boolean(backend)} stats={backend?.progress} />
+      <Progress
+        decks={decks}
+        open={openDeck}
+        live={Boolean(backend)}
+        stats={backend?.progress}
+        openSession={
+          backend ? (item) => go(`study/${item.deckId}/${item.mode}?session=${item.id}`) : undefined
+        }
+      />
     );
   else if (route.page === 'create' || (route.page === 'edit' && selectedDeck))
     content = (
@@ -197,12 +205,13 @@ export function Workspace({ backend }: { backend?: Backend }) {
   else if (route.page === 'study' && selectedDeck)
     content = (
       <Study
-        key={`${route.id}-${route.mode}`}
+        key={`${route.id}-${route.mode}-${route.session ?? ''}`}
         deck={selectedDeck}
         mode={route.mode}
         back={() => openDeck(selectedDeck.id)}
         changeMode={(mode) => startStudy(selectedDeck.id, mode)}
-        review={backend?.review}
+        saved={backend?.studySaved}
+        sessionId={route.session}
       />
     );
   else
@@ -424,7 +433,7 @@ export function Workspace({ backend }: { backend?: Backend }) {
         <Modal title={ru.helpTitle} close={closeModal}>
           <p>
             {backend
-              ? 'Наборы, карточки, папки и избранное сохраняются в аккаунте. В режиме карточек можно отмечать «Знаю» и «Ещё учу». Заучивание, тест и подбор пока доступны как демонстрации.'
+              ? 'Наборы, карточки, папки и избранное сохраняются в аккаунте. В режиме карточек можно отмечать «Знаю» и «Ещё учу». Все четыре режима сохраняют занятия и результаты. Незавершённое занятие можно продолжить. В тесте ответы проверяются после сдачи, а в заучивании ошибки повторяются.'
               : ru.helpText}
           </p>
           <button className="primary" onClick={closeModal}>

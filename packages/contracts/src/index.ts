@@ -98,3 +98,5 @@ export interface ProgressDto {
   known: number;
   decks: number;
 }
+
+export * from './study.ts';

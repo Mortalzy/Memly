@@ -34,6 +34,7 @@ export interface Backend {
   review: (card: CardDto, known: boolean) => Promise<void>;
   saveProfile: (name: string) => Promise<void>;
   logout: () => Promise<void>;
+  studySaved: () => Promise<void>;
 }
 const client = new QueryClient({
   defaultOptions: { queries: { retry: false, staleTime: 10000, gcTime: 0 } },
@@ -88,6 +89,11 @@ function ConnectedWorkspace({ user, signedOut }: { user: UserDto; signedOut: () 
       cache.invalidateQueries({ queryKey: ['progress'] }),
     ]);
   };
+  const previousPage = useRef(route.page);
+  useEffect(() => {
+    if (previousPage.current === 'study' && route.page !== 'study') void refresh();
+    previousPage.current = route.page;
+  }, [route.page]);
   const sessionExpired = [decks.error, folders.error, detail.error, progress.error].some(
     (error) => error instanceof ApiError && error.status === 401,
   );
@@ -121,6 +127,7 @@ function ConnectedWorkspace({ user, signedOut }: { user: UserDto; signedOut: () 
     detailError: detail.error ? errorMessage(detail.error) : '',
     scope,
     setScope,
+    studySaved: refresh,
     async save(deck) {
       const input: DeckInput = {
         title: deck.title,

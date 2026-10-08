@@ -22,6 +22,7 @@ model User {
   favorites Favorite[]
   progress CardProgress[]
   reviews ReviewEvent[]
+  studySessions StudySession[]
   @@map("users")
 }
 model Session {
@@ -90,6 +91,7 @@ model Deck {
   updatedAt DateTime @updatedAt @db.Timestamptz(3) @map("updated_at")
   cards Card[]
   favorites Favorite[]
+  studySessions StudySession[]
   @@index([ownerId, updatedAt])
   @@index([visibility, updatedAt])
   @@index([folderId])
@@ -160,4 +162,40 @@ model ReviewEvent {
   createdAt DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
   @@id([userId, eventId])
   @@map("review_events")
+}
+
+model StudySession {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deckId String @db.Uuid @map("deck_id")
+  deck Deck @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  requestId String @db.Uuid @map("request_id")
+  request Json
+  mode String
+  deckTitle String @map("deck_title")
+  deckRevision Int @map("deck_revision")
+  cardCount Int @map("card_count")
+  direction String
+  summary Json
+  revision Int @default(1)
+  status String @default("active")
+  state Json
+  startedAt DateTime @default(now()) @db.Timestamptz(3) @map("started_at")
+  completedAt DateTime? @db.Timestamptz(3) @map("completed_at")
+  elapsedMs Int @default(0) @map("elapsed_ms")
+  events StudyEvent[]
+  @@unique([userId, requestId])
+  @@index([userId, deckId, mode, status])
+  @@index([userId, startedAt])
+  @@map("study_sessions")
+}
+model StudyEvent {
+  sessionId String @db.Uuid @map("session_id")
+  session StudySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  eventId String @db.Uuid @map("event_id")
+  input Json
+  createdAt DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
+  @@id([sessionId, eventId])
+  @@map("study_events")
 }

@@ -10,11 +10,16 @@ import {
   pageSchema,
   profileSchema,
   reviewSchema,
+  startStudySchema,
+  studyEventSchema,
+  activeStudySchema,
   type UserDto,
 } from '@memly/contracts';
 import type { PrismaClient } from '@memly/database';
 import { createDeckService } from '../modules/decks/decks.service.ts';
 import { createLibraryService } from '../modules/library/library.service.ts';
+import { z } from 'zod';
+import { createStudySessionService } from '../modules/study/sessions.service.ts';
 import { createStudyService } from '../modules/study/study.service.ts';
 
 export function createRoutes(db: PrismaClient): Router {
@@ -22,6 +27,7 @@ export function createRoutes(db: PrismaClient): Router {
   const decks = createDeckService(db);
   const library = createLibraryService(db);
   const study = createStudyService(db);
+  const sessions = createStudySessionService(db);
   router.get('/me', (_req, res) => {
     res.json(res.locals.user as UserDto);
   });
@@ -100,6 +106,31 @@ export function createRoutes(db: PrismaClient): Router {
   });
   router.get('/study/progress', async (_req, res) => {
     res.json(await study.progress(res.locals.user.id));
+  });
+  router.post('/study/sessions', async (req, res) => {
+    res
+      .status(201)
+      .json(await sessions.start(res.locals.user.id, startStudySchema.parse(req.body)));
+  });
+  router.get('/study/sessions/active', async (req, res) => {
+    const input = activeStudySchema.parse(req.query);
+    res.json(await sessions.active(res.locals.user.id, input.deckId, input.mode));
+  });
+  router.get('/study/sessions/:id', async (req, res) => {
+    res.json(await sessions.get(res.locals.user.id, idSchema.parse(req.params.id)));
+  });
+  router.post('/study/sessions/:id/events', async (req, res) => {
+    res.json(
+      await sessions.event(
+        res.locals.user.id,
+        idSchema.parse(req.params.id),
+        studyEventSchema.parse(req.body),
+      ),
+    );
+  });
+  router.get('/study/overview', async (req, res) => {
+    const days = z.coerce.number().int().min(1).max(366).default(30).parse(req.query.days);
+    res.json(await sessions.overview(res.locals.user.id, days));
   });
   return router;
 }
