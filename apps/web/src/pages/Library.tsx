@@ -13,6 +13,7 @@ export function Library({
   setQuery,
   create,
   folderTitle,
+  viewerId,
 }: {
   decks: Deck[];
   actions: DeckActions;
@@ -20,13 +21,17 @@ export function Library({
   setQuery: (value: string) => void;
   create: () => void;
   folderTitle?: string;
+  viewerId?: string;
 }) {
   const [filter, setFilter] = useState('all');
   const [sort, setSort] = useState('recent');
   const filtered = decks.filter(
     (deck) =>
-      deck.title.toLocaleLowerCase('ru').includes(query.toLocaleLowerCase('ru')) &&
-      (filter !== 'favorites' || deck.favorite),
+      `${deck.title} ${deck.description}`
+        .toLocaleLowerCase('ru')
+        .includes(query.toLocaleLowerCase('ru')) &&
+      (filter !== 'favorites' || deck.favorite) &&
+      (filter !== 'mine' || !viewerId || deck.ownerId === viewerId),
   );
   if (sort === 'name') filtered.sort((a, b) => a.title.localeCompare(b.title, 'ru'));
   return (
@@ -71,6 +76,7 @@ export function Library({
               deck={deck}
               open={() => actions.open(deck.id)}
               edit={() => actions.edit(deck.id)}
+              canEdit={!viewerId || deck.ownerId === viewerId}
               toggleFavorite={() => actions.favorite(deck.id)}
             />
           ))}

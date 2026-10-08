@@ -8,11 +8,13 @@ export function Folders({
   decks,
   open,
   create,
+  remove,
 }: {
   folders: Folder[];
   decks: Deck[];
   open: (id: string) => void;
   create: () => void;
+  remove?: (folder: Folder) => Promise<void>;
 }) {
   return (
     <>
@@ -28,19 +30,36 @@ export function Folders({
       />
       <div className="folder-grid">
         {folders.map((folder) => (
-          <button className="folder-tile" key={folder.id} onClick={() => open(folder.id)}>
-            <div className="folder-top">
-              <Symbol value={folder.icon} />
-              <ArrowRight size={21} />
-            </div>
-            <h2>{folder.title}</h2>
-            <p>{deckCount(decks.filter((deck) => deck.folder === folder.id).length)}</p>
-            <div className="folder-lines" aria-hidden="true">
-              <span />
-              <span />
-              <span />
-            </div>
-          </button>
+          <div key={folder.id}>
+            <button className="folder-tile" key={folder.id} onClick={() => open(folder.id)}>
+              <div className="folder-top">
+                <Symbol value={folder.icon} />
+                <ArrowRight size={21} />
+              </div>
+              <h2>{folder.title}</h2>
+              <p>
+                {deckCount(
+                  folder.count ?? decks.filter((deck) => deck.folder === folder.id).length,
+                )}
+              </p>
+              <div className="folder-lines" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </div>
+            </button>
+            {remove && (
+              <button
+                className="text-button"
+                onClick={() => {
+                  if (window.confirm('Удалить папку? Наборы сохранятся без папки.'))
+                    void remove(folder);
+                }}
+              >
+                Удалить папку
+              </button>
+            )}
+          </div>
         ))}
       </div>
     </>

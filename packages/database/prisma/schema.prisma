@@ -1,0 +1,163 @@
+generator client {
+  provider = "prisma-client-js"
+  output = "../generated"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id String @id
+  name String
+  email String @unique
+  emailVerified Boolean @default(false) @map("email_verified")
+  image String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
+  updatedAt DateTime @updatedAt @db.Timestamptz(3) @map("updated_at")
+  sessions Session[]
+  accounts Account[]
+  decks Deck[]
+  folders Folder[]
+  favorites Favorite[]
+  progress CardProgress[]
+  reviews ReviewEvent[]
+  @@map("users")
+}
+model Session {
+  id String @id
+  token String @unique
+  expiresAt DateTime @db.Timestamptz(3) @map("expires_at")
+  createdAt DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
+  updatedAt DateTime @updatedAt @db.Timestamptz(3) @map("updated_at")
+  ipAddress String? @map("ip_address")
+  userAgent String? @map("user_agent")
+  userId String @map("user_id")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+  @@map("sessions")
+}
+model Account {
+  id String @id
+  accountId String @map("account_id")
+  providerId String @map("provider_id")
+  userId String @map("user_id")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken String? @map("access_token")
+  refreshToken String? @map("refresh_token")
+  idToken String? @map("id_token")
+  accessTokenExpiresAt DateTime? @db.Timestamptz(3) @map("access_token_expires_at")
+  refreshTokenExpiresAt DateTime? @db.Timestamptz(3) @map("refresh_token_expires_at")
+  scope String?
+  password String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
+  updatedAt DateTime @updatedAt @db.Timestamptz(3) @map("updated_at")
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("accounts")
+}
+model Verification {
+  id String @id
+  identifier String
+  value String
+  expiresAt DateTime @db.Timestamptz(3) @map("expires_at")
+  createdAt DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
+  updatedAt DateTime @updatedAt @db.Timestamptz(3) @map("updated_at")
+  @@index([identifier])
+  @@map("verifications")
+}
+model RateLimit {
+  id String @id @default(uuid())
+  key String @unique
+  count Int
+  lastRequest BigInt @map("last_request")
+  @@map("rate_limits")
+}
+model Deck {
+  id String @id @default(uuid()) @db.Uuid
+  ownerId String @map("owner_id")
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  title String @db.VarChar(100)
+  description String @default("") @db.VarChar(500)
+  icon String @default("book")
+  visibility String @default("private")
+  termLanguage String @default("en") @map("term_language")
+  definitionLanguage String @default("ru") @map("definition_language")
+  revision Int @default(1)
+  folderId String? @db.Uuid @map("folder_id")
+  folder Folder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
+  updatedAt DateTime @updatedAt @db.Timestamptz(3) @map("updated_at")
+  cards Card[]
+  favorites Favorite[]
+  @@index([ownerId, updatedAt])
+  @@index([visibility, updatedAt])
+  @@index([folderId])
+  @@map("decks")
+}
+model Card {
+  id String @id @default(uuid()) @db.Uuid
+  deckId String @db.Uuid @map("deck_id")
+  deck Deck @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  term String @db.VarChar(2000)
+  definition String @db.VarChar(5000)
+  position Int
+  revision Int @default(1)
+  versions CardVersion[]
+  progress CardProgress[]
+  @@index([deckId, position])
+  @@map("cards")
+}
+model CardVersion {
+  id String @id @default(uuid()) @db.Uuid
+  cardId String @db.Uuid @map("card_id")
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  revision Int
+  term String @db.VarChar(2000)
+  definition String @db.VarChar(5000)
+  createdAt DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
+  @@unique([cardId, revision])
+  @@map("card_versions")
+}
+model Folder {
+  id String @id @default(uuid()) @db.Uuid
+  ownerId String @map("owner_id")
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  title String @db.VarChar(80)
+  icon String @default("folders")
+  revision Int @default(1)
+  decks Deck[]
+  createdAt DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
+  @@index([ownerId])
+  @@map("folders")
+}
+model Favorite {
+  userId String @map("user_id")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deckId String @db.Uuid @map("deck_id")
+  deck Deck @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  @@id([userId, deckId])
+  @@map("favorites")
+}
+model CardProgress {
+  userId String @map("user_id")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cardId String @db.Uuid @map("card_id")
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  cardRevision Int @map("card_revision")
+  known Boolean @default(false)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3) @map("updated_at")
+  @@id([userId, cardId])
+  @@map("card_progress")
+}
+model ReviewEvent {
+  userId String @map("user_id")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventId String @db.Uuid @map("event_id")
+  cardId String @db.Uuid @map("card_id")
+  cardRevision Int @map("card_revision")
+  known Boolean
+  createdAt DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
+  @@id([userId, eventId])
+  @@map("review_events")
+}

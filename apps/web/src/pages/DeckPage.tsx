@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { errorMessage } from '../shared/api';
 import { ArrowLeft, Pencil, Star, LockKeyhole } from 'lucide-react';
 import type { Deck, StudyMode } from '../entities/deck';
 import { Modes, ProgressBar, Symbol } from '../shared/ui';
@@ -9,13 +11,21 @@ export function DeckPage({
   edit,
   favorite,
   study,
+  live = false,
+  canEdit = true,
+  remove,
 }: {
   deck: Deck;
   back: () => void;
   edit: () => void;
   favorite: () => void;
   study: (mode: StudyMode) => void;
+  live?: boolean;
+  canEdit?: boolean;
+  remove?: () => Promise<void>;
 }) {
+  const [error, setError] = useState('');
+  const [pending, setPending] = useState(false);
   return (
     <>
       <button className="back-link" onClick={back}>
@@ -37,18 +47,45 @@ export function DeckPage({
           >
             <Star size={20} fill={deck.favorite ? 'currentColor' : 'none'} />
           </button>
-          <button className="secondary" onClick={edit}>
-            <Pencil size={17} />
-            {ru.edit}
-          </button>
+          {canEdit && (
+            <button className="secondary" onClick={edit}>
+              <Pencil size={17} />
+              {ru.edit}
+            </button>
+          )}
         </div>
       </div>
+      {canEdit && remove && (
+        <button
+          className="text-button"
+          disabled={pending}
+          onClick={async () => {
+            if (!window.confirm('Удалить набор и все его карточки?')) return;
+            setPending(true);
+            setError('');
+            try {
+              await remove();
+            } catch (error) {
+              setError(errorMessage(error));
+            } finally {
+              setPending(false);
+            }
+          }}
+        >
+          Удалить набор
+        </button>
+      )}
+      {error && (
+        <p role="alert" className="form-error">
+          {error}
+        </p>
+      )}
       <div className="deck-author">
         <span className="avatar small">М</span>
-        {ru.author}
+        {deck.ownerName ?? ru.author}
         <span className="dot">·</span>
         <LockKeyhole size={14} />
-        {ru.private}
+        {deck.visibility === 'public' ? ru.public : ru.private}
       </div>
       <section className="deck-study-banner">
         <div>
@@ -64,9 +101,9 @@ export function DeckPage({
       <section className="terms-section">
         <div className="section-heading">
           <h2>{ru.terms}</h2>
-          <span className="muted">{ru.sampleCards}</span>
+          <span className="muted">{live ? cardCount(deck.cards.length) : ru.sampleCards}</span>
         </div>
-        <p className="muted small-text">{ru.demoContent}</p>
+        {!live && <p className="muted small-text">{ru.demoContent}</p>}
         <div className="terms-list">
           {deck.cards.map((card, i) => (
             <div className="term-row" key={card.id}>

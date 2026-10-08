@@ -15,35 +15,42 @@ export function Home({
   study,
   library,
   progress,
+  userName,
+  live = false,
+  stats,
 }: {
   decks: Deck[];
   actions: DeckActions;
   study: (mode: StudyMode) => void;
   library: () => void;
   progress: () => void;
+  userName?: string;
+  live?: boolean;
+  stats?: import('@memly/contracts').ProgressDto;
 }) {
+  const current = live ? decks[0] : decks.find((deck) => deck.id === 'english');
   return (
     <>
       <div className="welcome">
-        <h1>{ru.greeting}</h1>
+        <h1>{userName ? `Привет, ${userName}!` : ru.greeting}</h1>
         <p>{ru.subtitle}</p>
       </div>
       <section className="continue-card">
         <div className="continue-content">
           <span className="eyebrow">{ru.continueLabel}</span>
-          <h2>{decks.find((deck) => deck.id === 'english')?.title}</h2>
+          <h2>{current?.title ?? 'Создайте первый набор'}</h2>
           <p>
-            {cardCount(42)}
+            {cardCount(current?.count ?? 0)}
             <span className="dot">·</span>
-            {ru.studyMeta}
+            {live ? 'Карточки для вашего следующего занятия' : ru.studyMeta}
           </p>
           <div className="hero-progress">
-            <ProgressBar value={43} />
-            <span>43%</span>
+            <ProgressBar value={current?.progress ?? 0} />
+            <span>{current?.progress ?? 0}%</span>
           </div>
           <button className="primary" onClick={() => study('cards')}>
             <Play size={18} fill="currentColor" />
-            {ru.continue}
+            {current ? ru.continue : ru.create}
           </button>
         </div>
         <div className="cards-illustration" aria-hidden="true">
@@ -83,13 +90,21 @@ export function Home({
       </section>
       <section className="weekly-card">
         <div className="section-heading">
-          <h2>{ru.week}</h2>
+          <h2>{live ? 'Ваш прогресс' : ru.week}</h2>
           <button className="text-button" onClick={progress}>
             {ru.allStats}
             <ArrowRight size={18} />
           </button>
         </div>
-        <Stats />
+        {live ? (
+          <p>
+            {stats
+              ? `Повторений: ${stats.reviewed} · Известных карточек: ${stats.known} · Наборов: ${stats.decks}`
+              : 'Загружаем прогресс…'}
+          </p>
+        ) : (
+          <Stats />
+        )}
       </section>
     </>
   );

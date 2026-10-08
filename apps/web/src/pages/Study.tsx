@@ -3,18 +3,24 @@ import { ArrowLeft, ArrowRight, Check, ChevronDown, RotateCcw, X } from 'lucide-
 import type { Deck, StudyMode } from '../entities/deck';
 import { Modes, ProgressBar } from '../shared/ui';
 import { ru } from '../shared/ru';
+import type { CardDto } from '@memly/contracts';
+import { errorMessage } from '../shared/api';
 
 export function Study({
   deck,
   mode,
   back,
   changeMode,
+  review,
 }: {
   deck: Deck;
   mode: StudyMode;
   back: () => void;
   changeMode: (mode: StudyMode) => void;
+  review?: (card: CardDto, known: boolean) => Promise<void>;
 }) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [answer, setAnswer] = useState<number | null>(null);
@@ -30,6 +36,19 @@ export function Study({
     setIndex((value) => (value + 1) % deck.cards.length);
     setFlipped(false);
     setAnswer(null);
+  };
+  const mark = async (known: boolean) => {
+    if (pending) return;
+    setPending(true);
+    setError('');
+    try {
+      await review?.({ ...card, revision: card.revision ?? 1 }, known);
+      next();
+    } catch (error) {
+      setError(errorMessage(error));
+    } finally {
+      setPending(false);
+    }
   };
   const previous = () => {
     setIndex((value) => (value - 1 + deck.cards.length) % deck.cards.length);
@@ -99,7 +118,9 @@ export function Study({
         </div>
       )}
       <div className="study-intro">
-        <span className="eyebrow">{ru.demoSession}</span>
+        <span className="eyebrow">
+          {review && mode === 'cards' ? 'Карточки · прогресс сохраняется' : ru.demoSession}
+        </span>
         <h1>{mode === 'match' ? ru.matchTitle : ru[mode]}</h1>
         <p>
           {mode === 'match' ? ru.matchHintLong : mode === 'test' ? ru.testHintLong : ru.studyHint}
@@ -149,15 +170,20 @@ export function Study({
             </button>
           </div>
           <div className="review-buttons">
-            <button className="secondary" onClick={next}>
+            <button className="secondary" onClick={() => void mark(false)} disabled={pending}>
               <RotateCcw size={17} />
               {ru.learning}
             </button>
-            <button className="primary" onClick={next}>
+            <button className="primary" onClick={() => void mark(true)} disabled={pending}>
               <Check size={18} />
               {ru.know}
             </button>
           </div>
+          {error && (
+            <p role="alert" className="form-error">
+              {error}
+            </p>
+          )}
           <p className="keyboard-hint">{ru.flipHint}</p>
         </>
       )}
@@ -191,7 +217,7 @@ export function Study({
                   <strong>{ru.selectedAnswer}</strong>
                   <p>{ru.selectedHint}</p>
                 </div>
-                <button className="primary" onClick={next}>
+                <button className="primary" onClick={() => void mark(true)} disabled={pending}>
                   {ru.nextCard}
                   <ArrowRight size={17} />
                 </button>

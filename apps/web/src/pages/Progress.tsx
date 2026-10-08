@@ -6,8 +6,41 @@ import { PageHeading, ProgressBar, Stats, Symbol } from '../shared/ui';
 import { ru } from '../shared/ru';
 
 const days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-export function Progress({ decks, open }: { decks: Deck[]; open: (id: string) => void }) {
+export function Progress({
+  decks,
+  open,
+  live = false,
+  stats,
+}: {
+  decks: Deck[];
+  open: (id: string) => void;
+  live?: boolean;
+  stats?: import('@memly/contracts').ProgressDto;
+}) {
   const [month, setMonth] = useState(false);
+  if (live)
+    return (
+      <>
+        <PageHeading title={ru.progress} subtitle="Ваш прогресс в режиме карточек" />
+        <section className="panel settings-panel">
+          <p>
+            {stats
+              ? `Повторений: ${stats.reviewed} · Известных карточек: ${stats.known} · Ваших наборов: ${stats.decks}`
+              : 'Загружаем прогресс…'}
+          </p>
+        </section>
+        <div className="panel progress-list">
+          {decks.map((deck) => (
+            <button key={deck.id} onClick={() => open(deck.id)}>
+              <Symbol value={deck.icon} />
+              <strong>{deck.title}</strong>
+              <ProgressBar value={deck.progress} />
+              <span>{deck.progress}%</span>
+            </button>
+          ))}
+        </div>
+      </>
+    );
   const bars = month ? [42, 62, 35, 80, 66, 45, 85] : [35, 61, 48, 79, 64, 20, 9];
   return (
     <>

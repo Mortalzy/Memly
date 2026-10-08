@@ -9,11 +9,13 @@ export function DeckTile({
   open,
   edit,
   toggleFavorite,
+  canEdit = true,
 }: {
   deck: Deck;
   open: () => void;
   edit: () => void;
   toggleFavorite: () => void;
+  canEdit?: boolean;
 }) {
   const [menu, setMenu] = useState(false);
   return (
@@ -52,14 +54,16 @@ export function DeckTile({
               <Star size={17} />
               {deck.favorite ? ru.unfavorite : ru.favorite}
             </button>
-            <button
-              onClick={() => {
-                edit();
-                setMenu(false);
-              }}
-            >
-              {ru.edit}
-            </button>
+            {canEdit && (
+              <button
+                onClick={() => {
+                  edit();
+                  setMenu(false);
+                }}
+              >
+                {ru.edit}
+              </button>
+            )}
           </div>
         </>
       )}

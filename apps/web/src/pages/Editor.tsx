@@ -1,17 +1,22 @@
 import { useState } from 'react';
-import { ArrowLeft, Plus, Trash2, LockKeyhole } from 'lucide-react';
-import type { Card, Deck } from '../entities/deck';
+import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import type { Card, Deck, Folder } from '../entities/deck';
 import { PageHeading } from '../shared/ui';
 import { ru } from '../shared/ru';
+import { errorMessage } from '../shared/api';
 
 export function Editor({
   deck,
   back,
   save,
+  folders,
+  live = false,
 }: {
   deck?: Deck;
   back: () => void;
-  save: (deck: Deck) => void;
+  save: (deck: Deck) => void | Promise<void>;
+  folders?: Folder[];
+  live?: boolean;
 }) {
   const [title, setTitle] = useState(deck?.title ?? '');
   const [description, setDescription] = useState(deck?.description ?? '');
@@ -21,7 +26,12 @@ export function Editor({
       { id: 'second', term: '', definition: '' },
     ],
   );
-  const [error, setError] = useState(false);
+  const [error, setError] = useState('');
+  const [pending, setPending] = useState(false);
+  const [visibility, setVisibility] = useState(deck?.visibility ?? 'private');
+  const [folder, setFolder] = useState(deck?.folder ?? '');
+  const [termLanguage, setTermLanguage] = useState(deck?.termLanguage ?? 'en');
+  const [definitionLanguage, setDefinitionLanguage] = useState(deck?.definitionLanguage ?? 'ru');
   const update = (id: string, key: 'term' | 'definition', value: string) =>
     setCards((items) => items.map((item) => (item.id === id ? { ...item, [key]: value } : item)));
   return (
@@ -33,24 +43,41 @@ export function Editor({
       <PageHeading title={deck ? ru.editTitle : ru.create} subtitle={ru.createHint} />
       <form
         className="editor"
-        onSubmit={(event) => {
+        onSubmit={async (event) => {
           event.preventDefault();
+          if (pending) return;
           const filled = cards.filter((card) => card.term.trim() && card.definition.trim());
-          if (!title.trim() || filled.length < 2) {
-            setError(true);
+          if (
+            !title.trim() ||
+            filled.length < 2 ||
+            cards.some((card) => Boolean(card.term.trim()) !== Boolean(card.definition.trim()))
+          ) {
+            setError(ru.validation);
             return;
           }
-          save({
-            id: deck?.id ?? crypto.randomUUID(),
-            title: title.trim(),
-            description,
-            icon: deck?.icon ?? 'book',
-            count: filled.length,
-            progress: deck?.progress ?? 0,
-            folder: deck?.folder ?? 'development',
-            favorite: deck?.favorite ?? false,
-            cards: filled,
-          });
+          setPending(true);
+          setError('');
+          try {
+            await save({
+              id: deck?.id ?? crypto.randomUUID(),
+              title: title.trim(),
+              description,
+              icon: deck?.icon ?? 'book',
+              count: filled.length,
+              progress: deck?.progress ?? 0,
+              folder: live ? folder : (deck?.folder ?? 'development'),
+              revision: deck?.revision,
+              visibility,
+              termLanguage,
+              definitionLanguage,
+              favorite: deck?.favorite ?? false,
+              cards: filled,
+            });
+          } catch (error) {
+            setError(errorMessage(error));
+          } finally {
+            setPending(false);
+          }
         }}
       >
         <section className="panel editor-info">
@@ -73,24 +100,47 @@ export function Editor({
               rows={2}
             />
           </label>
+          {folders && (
+            <label>
+              Папка
+              <select value={folder} onChange={(event) => setFolder(event.target.value)}>
+                <option value="">Без папки</option>
+                {folders.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <div className="editor-meta">
             <label>
               {ru.visibility}
-              <span className="privacy-label">
-                <LockKeyhole size={16} />
-                {ru.private}
-              </span>
+              <select
+                value={visibility}
+                onChange={(event) => setVisibility(event.target.value as 'private' | 'public')}
+                disabled={!live}
+              >
+                <option value="private">{ru.private}</option>
+                <option value="public">{ru.public}</option>
+              </select>
             </label>
             <label>
               {ru.termLanguage}
-              <select defaultValue="en">
+              <select
+                value={termLanguage}
+                onChange={(event) => setTermLanguage(event.target.value as 'en' | 'ru')}
+              >
                 <option value="en">{ru.english}</option>
                 <option value="ru">{ru.russian}</option>
               </select>
             </label>
             <label>
               {ru.definitionLanguage}
-              <select defaultValue="ru">
+              <select
+                value={definitionLanguage}
+                onChange={(event) => setDefinitionLanguage(event.target.value as 'en' | 'ru')}
+              >
                 <option value="ru">{ru.russian}</option>
                 <option value="en">{ru.english}</option>
               </select>
@@ -121,6 +171,7 @@ export function Editor({
                   {ru.term}
                   <textarea
                     rows={2}
+                    maxLength={2000}
                     value={card.term}
                     onChange={(event) => update(card.id, 'term', event.target.value)}
                     placeholder={ru.enterTerm}
@@ -130,6 +181,7 @@ export function Editor({
                   {ru.definition}
                   <textarea
                     rows={2}
+                    maxLength={5000}
                     value={card.definition}
                     onChange={(event) => update(card.id, 'definition', event.target.value)}
                     placeholder={ru.enterDefinition}
@@ -151,15 +203,15 @@ export function Editor({
         </button>
         {error && (
           <p className="form-error" role="alert">
-            {ru.validation}
+            {error}
           </p>
         )}
         <div className="editor-footer">
           <button type="button" className="secondary" onClick={back}>
             {ru.cancel}
           </button>
-          <button className="primary" type="submit">
-            {ru.saveDeck}
+          <button className="primary" type="submit" disabled={pending}>
+            {pending ? 'Сохраняем…' : ru.saveDeck}
           </button>
         </div>
       </form>

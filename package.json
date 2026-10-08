@@ -6,13 +6,19 @@
   "type": "module",
   "packageManager": "npm@11.9.0",
   "scripts": {
-    "dev": "npm run dev --workspace=@memly/web",
-    "build": "npm run build --workspace=@memly/web",
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run db:generate && npm run build --workspace=@memly/api && npm run build --workspace=@memly/web",
     "preview": "npm run preview --workspace=@memly/web",
-    "typecheck": "npm run typecheck --workspace=@memly/web",
-    "test": "npm run test --workspace=@memly/web",
-    "format": "prettier --write apps/web package.json docs/prototype.md .openai/hosting.json",
-    "format:check": "prettier --check apps/web package.json docs/prototype.md .openai/hosting.json"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "dev:web": "npm run dev --workspace=@memly/web",
+    "dev:api": "npm run dev --workspace=@memly/api",
+    "db:generate": "npm run generate --workspace=@memly/database",
+    "db:migrate": "npm run migrate --workspace=@memly/database",
+    "db:migrate:dev": "npm run migrate:dev --workspace=@memly/database --",
+    "start:api": "npm run start --workspace=@memly/api"
   },
   "devDependencies": {
     "prettier": "3.6.2"
@@ -24,5 +30,9 @@
   "workspaces": [
     "apps/*",
     "packages/*"
-  ]
+  ],
+  "overrides": {
+    "deepmerge-ts": "8.0.2",
+    "mysql2": "3.24.5"
+  }
 }

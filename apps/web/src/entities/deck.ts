@@ -3,6 +3,7 @@ export interface Card {
   id: string;
   term: string;
   definition: string;
+  revision?: number;
 }
 export interface Deck {
   id: string;
@@ -14,8 +15,16 @@ export interface Deck {
   folder: string;
   favorite: boolean;
   cards: Card[];
+  revision?: number;
+  ownerId?: string;
+  ownerName?: string;
+  visibility?: 'private' | 'public';
+  termLanguage?: 'ru' | 'en';
+  definitionLanguage?: 'ru' | 'en';
 }
 export interface Folder {
+  count?: number;
+  revision?: number;
   id: string;
   title: string;
   icon: string;

@@ -5,6 +5,6 @@ import './app/styles.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <App demo={import.meta.env.VITE_DEMO_MODE === 'true'} />
   </StrictMode>,
 );

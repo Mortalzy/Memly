@@ -34,7 +34,7 @@ afterEach(() => cleanup());
 
 async function openPage(path) {
   window.history.replaceState(null, '', `/#/${path}`);
-  render(createElement(App));
+  render(createElement(App, { demo: true }));
 }
 
 async function clickButton(name) {

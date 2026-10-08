@@ -12,3 +12,4 @@ test-results/
 uploads/
 .DS_Store
 Thumbs.db
+packages/database/generated/

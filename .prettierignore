@@ -1,7 +1,8 @@
 node_modules
 dist
-build
-coverage
-pnpm-lock.yaml
-playwright-report
-test-results
+packages/database/generated
+package-lock.json
+*.sql
+# Preserve historical documentation table formatting.
+docs/quizlet-analysis.md
+docs/code-style.md
