@@ -18,6 +18,7 @@ import type { Backend } from './ConnectedApp';
 import { errorMessage } from '../shared/api';
 import { StarterCatalog } from '../features/StarterCatalog';
 import { starterText } from '../shared/starter-text';
+import { applyTheme, readTheme, saveTheme } from '../shared/theme';
 
 export function Workspace({ backend }: { backend?: Backend }) {
   const [route, setRoute] = useState(() => parseRoute(window.location.hash));
@@ -33,7 +34,11 @@ export function Workspace({ backend }: { backend?: Backend }) {
   const [folderError, setFolderError] = useState('');
   const [folderPending, setFolderPending] = useState(false);
   const [toast, setToast] = useState('');
-  const [dark, setDark] = useState(false);
+  const [dark, setDarkState] = useState(() => readTheme() === 'dark');
+  const setDark = (value: boolean) => {
+    setDarkState(value);
+    if (!saveTheme(value ? 'dark' : 'light')) setToast(ru.themeNotSaved);
+  };
   const closeModal = useCallback(() => setModal(null), []);
   useEffect(() => {
     const update = () => {
@@ -51,7 +56,7 @@ export function Workspace({ backend }: { backend?: Backend }) {
     return () => window.clearTimeout(timer);
   }, [toast]);
   useEffect(() => {
-    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    applyTheme(dark ? 'dark' : 'light');
   }, [dark]);
   const go = (path: string) => {
     setQuery('');
