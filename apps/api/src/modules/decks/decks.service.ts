@@ -3,13 +3,13 @@ import type { DeckDto, DeckInput, DeckUpdate, PageDto } from '@memly/contracts';
 import { AppError, conflict, missing } from '../../http/errors.ts';
 
 type Database = PrismaClient | Prisma.TransactionClient;
-const include = (userId: string) => ({
+export const deckInclude = (userId: string) => ({
   owner: { select: { name: true } },
   cards: { orderBy: { position: 'asc' as const }, include: { progress: { where: { userId } } } },
   favorites: { where: { userId } },
 });
-type LoadedDeck = Prisma.DeckGetPayload<{ include: ReturnType<typeof include> }>;
-function dto(deck: LoadedDeck, userId: string, detail = true): DeckDto {
+type LoadedDeck = Prisma.DeckGetPayload<{ include: ReturnType<typeof deckInclude> }>;
+export function deckDto(deck: LoadedDeck, userId: string, detail = true): DeckDto {
   const known = deck.cards.filter((card) =>
     card.progress.some((progress) => progress.known && progress.cardRevision === card.revision),
   ).length;
@@ -36,7 +36,7 @@ function dto(deck: LoadedDeck, userId: string, detail = true): DeckDto {
 export async function readableDeck(db: Database, userId: string, id: string): Promise<LoadedDeck> {
   const deck = await db.deck.findFirst({
     where: { id, OR: [{ ownerId: userId }, { visibility: 'public' }] },
-    include: include(userId),
+    include: deckInclude(userId),
   });
   if (!deck) throw missing();
   return deck;
@@ -44,7 +44,7 @@ export async function readableDeck(db: Database, userId: string, id: string): Pr
 async function ownedDeck(db: Database, userId: string, id: string): Promise<LoadedDeck> {
   const deck = await db.deck.findFirst({
     where: { id, ownerId: userId },
-    include: include(userId),
+    include: deckInclude(userId),
   });
   if (!deck) throw missing();
   return deck;
@@ -84,21 +84,21 @@ export function createDeckService(db: PrismaClient) {
         db.deck.count({ where }),
         db.deck.findMany({
           where,
-          include: include(userId),
+          include: deckInclude(userId),
           orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
           skip: (query.page - 1) * query.limit,
           take: query.limit,
         }),
       ]);
       return {
-        items: items.map((deck) => dto(deck, userId, false)),
+        items: items.map((deck) => deckDto(deck, userId, false)),
         total,
         page: query.page,
         pages: Math.ceil(total / query.limit),
       };
     },
     async get(userId: string, id: string): Promise<DeckDto> {
-      return dto(await readableDeck(db, userId, id), userId);
+      return deckDto(await readableDeck(db, userId, id), userId);
     },
     async create(userId: string, input: DeckInput): Promise<DeckDto> {
       return db.$transaction(
@@ -118,9 +118,9 @@ export function createDeckService(db: PrismaClient) {
                 })),
               },
             },
-            include: include(userId),
+            include: deckInclude(userId),
           });
-          return dto(deck, userId);
+          return deckDto(deck, userId);
         },
         { isolationLevel: 'Serializable' },
       );
@@ -178,7 +178,7 @@ export function createDeckService(db: PrismaClient) {
               },
             });
           }
-          return dto(await ownedDeck(tx, userId, id), userId);
+          return deckDto(await ownedDeck(tx, userId, id), userId);
         },
         { isolationLevel: 'Serializable', timeout: 15000 },
       );

@@ -24,8 +24,9 @@ export interface Backend {
   progressError: string;
   detailLoading: boolean;
   detailError: string;
-  scope: 'mine' | 'public';
-  setScope: (scope: 'mine' | 'public') => void;
+  scope: 'mine' | 'public' | 'starters';
+  setScope: (scope: 'mine' | 'public' | 'starters') => void;
+  addStarter: (key: string) => Promise<DeckDto>;
   save: (deck: Deck) => Promise<DeckDto>;
   favorite: (id: string, favorite: boolean) => Promise<void>;
   createFolder: (title: string) => Promise<void>;
@@ -56,16 +57,17 @@ function ConnectedWorkspace({ user, signedOut }: { user: UserDto; signedOut: () 
   const cache = useQueryClient();
   const pendingReviews = useRef(new Map<string, string>());
   const [route, setRoute] = useState(() => parseRoute(window.location.hash));
-  const [catalogScope, setScope] = useState<'mine' | 'public'>('mine');
+  const [catalogScope, setScope] = useState<'mine' | 'public' | 'starters'>('mine');
   const scope = route.page === 'library' ? catalogScope : 'mine';
+  const deckScope = scope === 'starters' ? 'mine' : scope;
   useEffect(() => {
     const update = () => setRoute(parseRoute(window.location.hash));
     window.addEventListener('hashchange', update);
     return () => window.removeEventListener('hashchange', update);
   }, []);
   const decks = useQuery({
-    queryKey: ['decks', scope],
-    queryFn: ({ signal }) => allDecks(scope, signal),
+    queryKey: ['decks', deckScope],
+    queryFn: ({ signal }) => allDecks(deckScope, signal),
   });
   const folders = useQuery({
     queryKey: ['folders'],
@@ -128,6 +130,15 @@ function ConnectedWorkspace({ user, signedOut }: { user: UserDto; signedOut: () 
     scope,
     setScope,
     studySaved: refresh,
+    async addStarter(key) {
+      const copy = await api<DeckDto>(`/v1/starter-decks/${key}/add`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      cache.setQueryData(['deck', copy.id], copy);
+      await refresh();
+      return copy;
+    },
     async save(deck) {
       const input: DeckInput = {
         title: deck.title,

@@ -16,6 +16,8 @@ import { ru } from '../shared/ru';
 import { navigate, parseRoute } from './navigation';
 import type { Backend } from './ConnectedApp';
 import { errorMessage } from '../shared/api';
+import { StarterCatalog } from '../features/StarterCatalog';
+import { starterText } from '../shared/starter-text';
 
 export function Workspace({ backend }: { backend?: Backend }) {
   const [route, setRoute] = useState(() => parseRoute(window.location.hash));
@@ -112,6 +114,10 @@ export function Workspace({ backend }: { backend?: Backend }) {
         library={() => go('library')}
         progress={() => go('progress')}
       />
+    );
+  else if (route.page === 'library' && backend?.scope === 'starters')
+    content = (
+      <StarterCatalog query={query} setQuery={setQuery} add={backend.addStarter} open={openDeck} />
     );
   else if (route.page === 'library' || route.page === 'folder')
     content = (
@@ -404,8 +410,33 @@ export function Workspace({ backend }: { backend?: Backend }) {
                 >
                   Публичные наборы
                 </button>
+                <button
+                  className={backend.scope === 'starters' ? 'active' : ''}
+                  onClick={() => backend.setScope('starters')}
+                >
+                  {starterText.tab}
+                </button>
               </div>
             )}
+            {backend &&
+              (route.page === 'home' || (route.page === 'library' && backend.scope === 'mine')) && (
+                <section className="panel starter-suggestion">
+                  <div>
+                    <strong>{starterText.suggestionTitle}</strong>
+                    <p>{starterText.suggestionHint}</p>
+                  </div>
+                  <button
+                    className="secondary"
+                    onClick={() => {
+                      go('library');
+                      backend.setScope('starters');
+                    }}
+                  >
+                    {starterText.browse}
+                    <ArrowRight size={17} />
+                  </button>
+                </section>
+              )}
             {backend?.progressError && (
               <p role="alert" className="form-error">
                 {backend.progressError}

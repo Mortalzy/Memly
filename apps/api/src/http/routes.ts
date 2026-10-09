@@ -13,6 +13,8 @@ import {
   startStudySchema,
   studyEventSchema,
   activeStudySchema,
+  starterKeySchema,
+  addStarterSchema,
   type UserDto,
 } from '@memly/contracts';
 import type { PrismaClient } from '@memly/database';
@@ -21,6 +23,7 @@ import { createLibraryService } from '../modules/library/library.service.ts';
 import { z } from 'zod';
 import { createStudySessionService } from '../modules/study/sessions.service.ts';
 import { createStudyService } from '../modules/study/study.service.ts';
+import { createStarterService } from '../modules/starters/starters.service.ts';
 
 export function createRoutes(db: PrismaClient): Router {
   const router = Router();
@@ -28,6 +31,7 @@ export function createRoutes(db: PrismaClient): Router {
   const library = createLibraryService(db);
   const study = createStudyService(db);
   const sessions = createStudySessionService(db);
+  const starters = createStarterService(db);
   router.get('/me', (_req, res) => {
     res.json(res.locals.user as UserDto);
   });
@@ -43,6 +47,16 @@ export function createRoutes(db: PrismaClient): Router {
   });
   router.get('/decks', async (req, res) => {
     res.json(await decks.list(res.locals.user.id, pageSchema.parse(req.query)));
+  });
+  router.get('/starter-decks', async (_req, res) => {
+    res.json(await starters.list(res.locals.user.id));
+  });
+  router.get('/starter-decks/:key', async (req, res) => {
+    res.json(await starters.get(res.locals.user.id, starterKeySchema.parse(req.params.key)));
+  });
+  router.post('/starter-decks/:key/add', async (req, res) => {
+    addStarterSchema.parse(req.body);
+    res.json(await starters.add(res.locals.user.id, starterKeySchema.parse(req.params.key)));
   });
   router.post('/decks', async (req, res) => {
     res.status(201).json(await decks.create(res.locals.user.id, deckInputSchema.parse(req.body)));
