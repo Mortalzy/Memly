@@ -100,4 +100,5 @@ export interface ProgressDto {
 }
 
 export * from './study.ts';
+export * from './activity.ts';
 export * from './starters.ts';

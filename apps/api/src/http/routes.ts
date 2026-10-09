@@ -13,6 +13,7 @@ import {
   startStudySchema,
   studyEventSchema,
   activeStudySchema,
+  activityQuerySchema,
   starterKeySchema,
   addStarterSchema,
   type UserDto,
@@ -24,6 +25,7 @@ import { z } from 'zod';
 import { createStudySessionService } from '../modules/study/sessions.service.ts';
 import { createStudyService } from '../modules/study/study.service.ts';
 import { createStarterService } from '../modules/starters/starters.service.ts';
+import { createActivityService } from '../modules/study/activity.service.ts';
 
 export function createRoutes(db: PrismaClient): Router {
   const router = Router();
@@ -32,6 +34,7 @@ export function createRoutes(db: PrismaClient): Router {
   const study = createStudyService(db);
   const sessions = createStudySessionService(db);
   const starters = createStarterService(db);
+  const activity = createActivityService(db);
   router.get('/me', (_req, res) => {
     res.json(res.locals.user as UserDto);
   });
@@ -145,6 +148,9 @@ export function createRoutes(db: PrismaClient): Router {
   router.get('/study/overview', async (req, res) => {
     const days = z.coerce.number().int().min(1).max(366).default(30).parse(req.query.days);
     res.json(await sessions.overview(res.locals.user.id, days));
+  });
+  router.get('/study/activity', async (req, res) => {
+    res.json(await activity.get(res.locals.user.id, activityQuerySchema.parse(req.query)));
   });
   return router;
 }

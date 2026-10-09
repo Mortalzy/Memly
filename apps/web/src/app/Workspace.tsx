@@ -163,10 +163,7 @@ export function Workspace({ backend }: { backend?: Backend }) {
   else if (route.page === 'progress')
     content = (
       <Progress
-        decks={decks}
-        open={openDeck}
         live={Boolean(backend)}
-        stats={backend?.progress}
         openSession={
           backend ? (item) => go(`study/${item.deckId}/${item.mode}?session=${item.id}`) : undefined
         }

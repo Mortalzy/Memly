@@ -7,6 +7,7 @@ import { createDatabase } from '@memly/database';
 import type { StudyAction, StudySessionDto } from '@memly/contracts';
 import { createApp } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
+import { calendarDate, shiftDate } from '../src/modules/study/activity.ts';
 const databaseUrl = process.env.TEST_DATABASE_URL;
 test('server study sessions with PostgreSQL', { skip: !databaseUrl }, async (t) => {
   assert.ok(databaseUrl);
@@ -252,6 +253,84 @@ test('server study sessions with PostgreSQL', { skip: !databaseUrl }, async (t) 
         revision: 1,
         action: { type: 'abandon' },
       }).expect(404);
+    },
+  );
+  await t.test(
+    'daily activity counts completion dates, modes, repeats and only accessible owned sessions',
+    async () => {
+      await db.studySession.deleteMany({ where: { userId } });
+      const timeZone = 'Europe/Samara';
+      const today = calendarDate(new Date(), timeZone);
+      const yesterday = shiftDate(today, -1);
+      const completedAt = new Date(`${yesterday}T20:00:00.001Z`);
+      const summary = {
+        total: 7,
+        answered: 7,
+        correct: 3,
+        mistakes: 4,
+        attempts: 7,
+        mastered: 3,
+        score: 43,
+      };
+      const fixture = (mode: string, status: string, end: Date | null = completedAt) => ({
+        userId,
+        deckId: deck.id,
+        requestId: randomUUID(),
+        request: {},
+        mode,
+        deckTitle: deck.title,
+        deckRevision: 1,
+        cardCount: 7,
+        direction: 'forward',
+        summary,
+        state: {},
+        status,
+        startedAt: new Date(`${shiftDate(today, -40)}T12:00:00Z`),
+        completedAt: end,
+      });
+      await db.studySession.createMany({
+        data: [
+          fixture('cards', 'completed'),
+          fixture('cards', 'completed'),
+          fixture('learn', 'completed'),
+          fixture('test', 'completed'),
+          fixture('match', 'completed'),
+          fixture('cards', 'active', null),
+          fixture('test', 'abandoned'),
+          fixture('cards', 'completed', new Date(`${yesterday}T19:59:59Z`)),
+          fixture('cards', 'completed', new Date(`${shiftDate(today, -2)}T12:00:00Z`)),
+        ],
+      });
+      const url = `/api/v1/study/activity?days=7&timeZone=${timeZone}`;
+      const result = (await alice.get(url).expect(200)).body;
+      assert.equal(result.days.length, 7);
+      assert.equal(result.completed, 7);
+      assert.equal(result.days.at(-1).date, today);
+      assert.equal(result.days.at(-1).completed, 5);
+      assert.equal(result.days.at(-2).completed, 1);
+      assert.equal(result.activeDays, 3);
+      assert.equal(result.streak, 3);
+      assert.deepEqual(result.todayByMode, { cards: 2, learn: 1, test: 1, match: 1 });
+      assert.equal(result.history.length, 7);
+      assert.ok(result.history.every((item: { status: string }) => item.status === 'completed'));
+      const filtered = (await alice.get(`${url}&mode=match`).expect(200)).body;
+      assert.equal(filtered.completed, 1);
+      assert.equal(filtered.streak, 1);
+      assert.equal(filtered.history[0].mode, 'match');
+      assert.equal((await bob.get(url).expect(200)).body.completed, 0);
+      const otherId = (await bob.get('/api/v1/me')).body.id;
+      const hidden = await db.studySession.create({
+        data: { ...fixture('cards', 'completed'), userId: otherId },
+      });
+      assert.equal((await bob.get(url).expect(200)).body.completed, 0);
+      await db.deck.update({ where: { id: deck.id }, data: { visibility: 'public' } });
+      assert.equal((await bob.get(url).expect(200)).body.completed, 1);
+      await db.deck.update({ where: { id: deck.id }, data: { visibility: 'private' } });
+      assert.equal((await bob.get(url).expect(200)).body.history.length, 0);
+      await db.studySession.delete({ where: { id: hidden.id } });
+      await alice.get('/api/v1/study/activity?days=10').expect(400);
+      await alice.get('/api/v1/study/activity?timeZone=unknown').expect(400);
+      await request(app).get('/api/v1/study/activity').expect(401);
     },
   );
 });
