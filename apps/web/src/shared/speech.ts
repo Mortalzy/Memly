@@ -82,46 +82,59 @@ export const speech = {
     }
     try {
       const synth = window.speechSynthesis;
-      // Some browsers load voices asynchronously. An empty list uses the utterance's lang
-      // and browser default; getVoices is read again for every subsequent user click.
+      // The list can load asynchronously or omit the browser's working default voice.
+      // Let synthesis decide whether the language is available instead of rejecting here.
       const voices = synth.getVoices();
       const voice = speechVoice(voices, language);
-      if (voices.length && !voice) {
-        publish({ owner, playing: false, error: speechText.missingVoice });
-        return;
-      }
-      const utterance = new window.SpeechSynthesisUtterance(value.trim());
-      utterance.lang = language;
-      if (voice) utterance.voice = voice;
-      active = utterance;
-      synthesis = synth;
-      const fail = (message: string) => {
-        if (active !== utterance) return;
-        speech.stop(owner);
-        publish({ owner, playing: false, error: message });
+      const startAttempt = (selectedVoice?: SpeechSynthesisVoice): void => {
+        const utterance = new window.SpeechSynthesisUtterance(value.trim());
+        utterance.lang = language;
+        if (selectedVoice) utterance.voice = selectedVoice;
+        active = utterance;
+        synthesis = synth;
+        const fail = (message: string) => {
+          if (active !== utterance) return;
+          speech.stop(owner);
+          publish({ owner, playing: false, error: message });
+        };
+        utterance.onstart = () => {
+          if (active === utterance) clearTimeout(startupTimer);
+        };
+        utterance.onend = () => {
+          if (active !== utterance) return;
+          active = null;
+          synthesis = null;
+          detach();
+          publish(idle);
+        };
+        utterance.onerror = (event) => {
+          if (active !== utterance) return;
+          const unavailable =
+            event.error === 'language-unavailable' || event.error === 'voice-unavailable';
+          if (unavailable && selectedVoice) {
+            // A listed voice can fail even though automatic selection worked earlier.
+            // Retry once with the same language and no explicit voice. Invalidate the old
+            // attempt before cancel(), whose late events must not stop the replacement.
+            active = null;
+            clearTimeout(startupTimer);
+            try {
+              synth.cancel();
+              startAttempt();
+            } catch {
+              speech.stop(owner);
+              publish({ owner, playing: false, error: speechText.failed });
+            }
+            return;
+          }
+          fail(unavailable ? speechText.missingVoice : speechText.failed);
+        };
+        publish({ owner, playing: true, error: '' });
+        window.addEventListener('hashchange', cancelSpeech);
+        document.addEventListener('visibilitychange', visibilityChanged);
+        startupTimer = setTimeout(() => fail(speechText.failed), 10000);
+        synth.speak(utterance);
       };
-      utterance.onstart = () => {
-        if (active === utterance) clearTimeout(startupTimer);
-      };
-      utterance.onend = () => {
-        if (active !== utterance) return;
-        active = null;
-        synthesis = null;
-        detach();
-        publish(idle);
-      };
-      utterance.onerror = (event) => {
-        fail(
-          event.error === 'language-unavailable' || event.error === 'voice-unavailable'
-            ? speechText.missingVoice
-            : speechText.failed,
-        );
-      };
-      publish({ owner, playing: true, error: '' });
-      window.addEventListener('hashchange', cancelSpeech);
-      document.addEventListener('visibilitychange', visibilityChanged);
-      startupTimer = setTimeout(() => fail(speechText.failed), 10000);
-      synth.speak(utterance);
+      startAttempt(voice);
     } catch {
       speech.stop(owner);
       publish({ owner, playing: false, error: speechText.failed });

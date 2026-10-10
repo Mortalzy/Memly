@@ -89,7 +89,7 @@ test('flipping stops sound and reads only the visible side without flipping or r
   cleanup();
   assert.equal(cancelled, 2);
 });
-test('unsupported browsers and missing language voices show useful messages without a wrong-language fallback', () => {
+test('unsupported browsers and synthesis language errors show useful messages without choosing a wrong-language voice', () => {
   render(createElement(SpeechButton, { text: 'Apple' }));
   Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: undefined });
   fireEvent.click(screen.getByRole('button', { name: 'Озвучить: Apple' }));
@@ -99,7 +99,11 @@ test('unsupported browsers and missing language voices show useful messages with
     configurable: true,
     value: {
       getVoices: () => [voice('ru-RU')],
-      speak: () => assert.fail('wrong voice'),
+      speak: (utterance) => {
+        assert.equal(utterance.lang, 'en-US');
+        assert.equal(utterance.voice, undefined);
+        utterance.onerror({ error: 'language-unavailable' });
+      },
       cancel: () => {},
     },
   });
@@ -119,6 +123,76 @@ test('an initially empty voice list delegates language selection and subsequent 
   assert.equal(spoken[1].voice.lang, 'en-GB');
   assert.equal(speechLanguage('  TAKE your time!'), 'en-US');
   assert.equal(speechLanguage('Не торопись'), 'ru-RU');
+});
+test('repeated playback still works when a loaded voice list omits the language that already played', () => {
+  for (const [text, language, otherLanguage] of [
+    ['Apple', 'en-US', 'ru-RU'],
+    ['Яблоко', 'ru-RU', 'en-US'],
+  ]) {
+    voices = [];
+    render(createElement(SpeechButton, { text }));
+    for (let attempt = 0; attempt < 3; attempt++) {
+      fireEvent.click(screen.getByRole('button', { name: `Озвучить: ${text}` }));
+      const utterance = spoken.at(-1);
+      assert.equal(utterance.text, text);
+      assert.equal(utterance.lang, language);
+      assert.equal(utterance.voice, undefined);
+      assert.equal(screen.queryByRole('status'), null);
+      act(() => utterance.onend());
+      voices = [voice(otherLanguage)];
+    }
+    cleanup();
+  }
+  assert.equal(spoken.length, 6);
+});
+test('a newly loaded but unavailable voice falls back once to automatic selection, including on repeated clicks', () => {
+  for (const [text, language] of [
+    ['Apple', 'en-US'],
+    ['Яблоко', 'ru-RU'],
+  ]) {
+    for (const error of ['voice-unavailable', 'language-unavailable']) {
+      voices = [];
+      render(createElement(SpeechButton, { text }));
+      fireEvent.click(screen.getByRole('button', { name: `Озвучить: ${text}` }));
+      act(() => spoken.at(-1).onend());
+      voices = [voice(language)];
+      for (let attempt = 0; attempt < 2; attempt++) {
+        fireEvent.click(screen.getByRole('button', { name: `Озвучить: ${text}` }));
+        const selected = spoken.at(-1);
+        assert.equal(selected.voice.lang, language);
+        act(() => selected.onerror({ error }));
+        const automatic = spoken.at(-1);
+        assert.notEqual(automatic, selected);
+        assert.equal(automatic.text, text);
+        assert.equal(automatic.lang, language);
+        assert.equal(automatic.voice, undefined);
+        act(() => {
+          selected.onend();
+          selected.onerror({ error });
+        });
+        assert.equal(spoken.at(-1), automatic);
+        assert.ok(screen.getByRole('button', { name: `Остановить озвучку: ${text}` }));
+        assert.equal(screen.queryByRole('status'), null);
+        act(() => automatic.onend());
+      }
+      cleanup();
+    }
+  }
+  assert.equal(spoken.length, 20);
+});
+test('unavailable automatic selection ends the retry and can recover on a later click without reloading', () => {
+  render(createElement(SpeechButton, { text: 'Apple' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Озвучить: Apple' }));
+  act(() => spoken[0].onerror({ error: 'voice-unavailable' }));
+  assert.equal(spoken.length, 2);
+  act(() => spoken[1].onerror({ error: 'language-unavailable' }));
+  assert.equal(spoken.length, 2);
+  assert.equal(speech.snapshot().playing, false);
+  assert.match(screen.getByRole('status').textContent, /Нет голоса/);
+  fireEvent.click(screen.getByRole('button', { name: 'Озвучить: Apple' }));
+  assert.equal(spoken.length, 3);
+  assert.equal(screen.queryByRole('status'), null);
+  act(() => spoken[2].onend());
 });
 test('playback errors allow retry; stale cancel errors do not interrupt the new utterance; route changes stop audio', () => {
   render(
