@@ -4,6 +4,7 @@ import { ArrowLeft, Pencil, Star, LockKeyhole } from 'lucide-react';
 import type { Deck, StudyMode } from '../entities/deck';
 import { Modes, ProgressBar, Symbol } from '../shared/ui';
 import { cardCount, ru } from '../shared/ru';
+import { SpeechButton } from '../shared/SpeechButton';
 
 export function DeckPage({
   deck,
@@ -108,8 +109,14 @@ export function DeckPage({
           {deck.cards.map((card, i) => (
             <div className="term-row" key={card.id}>
               <span className="term-number">{i + 1}</span>
-              <strong>{card.term}</strong>
-              <span>{card.definition}</span>
+              <div className="term-with-audio">
+                <strong>{card.term}</strong>
+                <SpeechButton text={card.term} />
+              </div>
+              <div className="term-with-audio">
+                <span>{card.definition}</span>
+                <SpeechButton text={card.definition} />
+              </div>
             </div>
           ))}
         </div>

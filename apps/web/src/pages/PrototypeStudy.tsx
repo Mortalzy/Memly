@@ -5,6 +5,7 @@ import { Modes, ProgressBar } from '../shared/ui';
 import { ru } from '../shared/ru';
 import type { CardDto } from '@memly/contracts';
 import { errorMessage } from '../shared/api';
+import { SpeechButton } from '../shared/SpeechButton';
 
 export function PrototypeStudy({
   deck,
@@ -134,30 +135,35 @@ export function PrototypeStudy({
               {index + 1} / {deck.cards.length}
             </span>
           </div>
-          <button
-            className={`flashcard ${flipped ? 'flipped' : ''}`}
-            onClick={() => setFlipped(!flipped)}
-            aria-label={`${ru.flipAria}: ${flipped ? card.definition : card.term}`}
-          >
-            <div className="flashcard-inner">
-              <div className="flashcard-face">
-                <span className="eyebrow">{ru.term}</span>
-                <strong>{card.term}</strong>
-                <span className="flashcard-footer">
-                  <RotateCcw size={15} />
-                  {ru.flip}
-                </span>
+          <div className="flashcard-with-audio">
+            <button
+              className={`flashcard ${flipped ? 'flipped' : ''}`}
+              onClick={() => setFlipped(!flipped)}
+              aria-label={`${ru.flipAria}: ${flipped ? card.definition : card.term}`}
+            >
+              <div className="flashcard-inner">
+                <div className="flashcard-face">
+                  <span className="eyebrow">{ru.term}</span>
+                  <strong>{card.term}</strong>
+                  <span className="flashcard-footer">
+                    <RotateCcw size={15} />
+                    {ru.flip}
+                  </span>
+                </div>
+                <div className="flashcard-face flashcard-back">
+                  <span className="eyebrow">{ru.definition}</span>
+                  <strong>{card.definition}</strong>
+                  <span className="flashcard-footer">
+                    <RotateCcw size={15} />
+                    {ru.flip}
+                  </span>
+                </div>
               </div>
-              <div className="flashcard-face flashcard-back">
-                <span className="eyebrow">{ru.definition}</span>
-                <strong>{card.definition}</strong>
-                <span className="flashcard-footer">
-                  <RotateCcw size={15} />
-                  {ru.flip}
-                </span>
-              </div>
+            </button>
+            <div className="flashcard-audio">
+              <SpeechButton key={card.id} text={flipped ? card.definition : card.term} />
             </div>
-          </button>
+          </div>
           <div className="card-controls">
             <button className="icon-button outlined" onClick={previous} aria-label={ru.previous}>
               <ArrowLeft size={20} />
@@ -197,7 +203,10 @@ export function PrototypeStudy({
           </div>
           <section className="panel question-panel">
             <span className="eyebrow">{ru.chooseAnswer}</span>
-            <h2>{card.term}</h2>
+            <div className="spoken-heading">
+              <h2>{card.term}</h2>
+              <SpeechButton key={card.id} text={card.term} />
+            </div>
             <div className="answer-grid">
               {options.map((option, i) => (
                 <button
@@ -261,7 +270,10 @@ export function PrototypeStudy({
                   <span className="eyebrow">
                     {ru.question} {questionIndex + 1} / {totalQuestions}
                   </span>
-                  <h2>{item.term}</h2>
+                  <div className="spoken-heading">
+                    <h2>{item.term}</h2>
+                    <SpeechButton text={item.term} />
+                  </div>
                   <div className="answer-grid">
                     {[item, ...deck.cards.filter((other) => other.id !== item.id).slice(0, 3)].map(
                       (option, optionIndex) => (

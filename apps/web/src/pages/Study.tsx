@@ -10,6 +10,7 @@ import type {
 import type { Deck, StudyMode } from '../entities/deck';
 import { Modes, ProgressBar } from '../shared/ui';
 import { ru } from '../shared/ru';
+import { SpeechButton } from '../shared/SpeechButton';
 import { studyText as text, studyDuration } from '../shared/study-text';
 import { errorMessage } from '../shared/api';
 import { studyClient } from '../features/study-client';
@@ -375,25 +376,30 @@ function SessionStudy({
               </div>
               {mode === 'cards' && q && (
                 <>
-                  <button
-                    className={`flashcard ${flipped ? 'flipped' : ''}`}
-                    aria-label={`${ru.flipAria}: ${flipped ? q.back : q.prompt}`}
-                    onClick={() => setFlipped(!flipped)}
-                  >
-                    <div className="flashcard-inner">
-                      <div className="flashcard-face">
-                        <span className="eyebrow">
-                          {options.direction === 'forward' ? ru.term : ru.definition}
-                        </span>
-                        <strong>{q.prompt}</strong>
-                        <span className="flashcard-footer">{ru.flip}</span>
+                  <div className="flashcard-with-audio">
+                    <button
+                      className={`flashcard ${flipped ? 'flipped' : ''}`}
+                      aria-label={`${ru.flipAria}: ${flipped ? q.back : q.prompt}`}
+                      onClick={() => setFlipped(!flipped)}
+                    >
+                      <div className="flashcard-inner">
+                        <div className="flashcard-face">
+                          <span className="eyebrow">
+                            {options.direction === 'forward' ? ru.term : ru.definition}
+                          </span>
+                          <strong>{q.prompt}</strong>
+                          <span className="flashcard-footer">{ru.flip}</span>
+                        </div>
+                        <div className="flashcard-face flashcard-back">
+                          <strong>{q.back}</strong>
+                          <span className="flashcard-footer">{ru.flip}</span>
+                        </div>
                       </div>
-                      <div className="flashcard-face flashcard-back">
-                        <strong>{q.back}</strong>
-                        <span className="flashcard-footer">{ru.flip}</span>
-                      </div>
+                    </button>
+                    <div className="flashcard-audio">
+                      <SpeechButton key={q.id} text={flipped ? (q.back ?? '') : q.prompt} />
                     </div>
-                  </button>
+                  </div>
                   <div className="card-controls">
                     <button
                       className="icon-button outlined"
@@ -451,7 +457,10 @@ function SessionStudy({
               {mode === 'learn' &&
                 (session.feedback ? (
                   <section className="panel question-panel">
-                    <h2>{session.feedback.prompt}</h2>
+                    <div className="spoken-heading">
+                      <h2>{session.feedback.prompt}</h2>
+                      <SpeechButton text={session.feedback.prompt} />
+                    </div>
                     <div
                       className={`study-feedback ${session.feedback.correct ? 'correct' : 'incorrect'}`}
                       role="status"
@@ -460,8 +469,9 @@ function SessionStudy({
                       <p>
                         {text.yourAnswer}: {session.feedback.answer}
                       </p>
-                      <p>
+                      <p className="spoken-answer">
                         {text.expected}: {session.feedback.expected}
+                        <SpeechButton text={session.feedback.expected} />
                       </p>
                     </div>
                     <button
@@ -485,7 +495,10 @@ function SessionStudy({
                       <span className="eyebrow">
                         {q.type === 'choice' ? text.choice : text.written}
                       </span>
-                      <h2>{q.prompt}</h2>
+                      <div className="spoken-heading">
+                        <h2>{q.prompt}</h2>
+                        <SpeechButton key={q.id} text={q.prompt} />
+                      </div>
                       <QuestionInput
                         question={q}
                         value={answer}
@@ -517,7 +530,10 @@ function SessionStudy({
                         <span className="eyebrow">
                           {ru.question} {index + 1} / {session.questions.length}
                         </span>
-                        <h2>{question.prompt}</h2>
+                        <div className="spoken-heading">
+                          <h2>{question.prompt}</h2>
+                          <SpeechButton text={question.prompt} />
+                        </div>
                         <QuestionInput
                           question={question}
                           value={drafts[question.id] ?? ''}
@@ -564,15 +580,17 @@ function SessionStudy({
                     {(['left', 'right'] as const).map((side) => (
                       <div key={side}>
                         {session.board![side].map((tile) => (
-                          <button
-                            key={tile.id}
-                            className={`match-tile ${tile.matched ? 'matched' : ''} ${selected?.id === tile.id ? 'selected' : ''}`}
-                            disabled={tile.matched || blocked}
-                            aria-pressed={selected?.id === tile.id}
-                            onClick={() => pair(side, tile.id)}
-                          >
-                            {tile.matched ? <Check size={22} /> : tile.text}
-                          </button>
+                          <div className="match-item" key={tile.id}>
+                            <button
+                              className={`match-tile ${tile.matched ? 'matched' : ''} ${selected?.id === tile.id ? 'selected' : ''}`}
+                              disabled={tile.matched || blocked}
+                              aria-pressed={selected?.id === tile.id}
+                              onClick={() => pair(side, tile.id)}
+                            >
+                              {tile.matched ? <Check size={22} /> : tile.text}
+                            </button>
+                            {!tile.matched && <SpeechButton text={tile.text} disabled={blocked} />}
+                          </div>
                         ))}
                       </div>
                     ))}

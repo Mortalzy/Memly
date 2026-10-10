@@ -120,7 +120,7 @@ test('test requires selections and shows explicitly illustrative results', async
   await openPage('study/english/test');
   assert.equal(screen.getByRole('button', { name: 'Завершить тест' }).disabled, true);
   for (const question of document.querySelectorAll('.test-question')) {
-    fireEvent.click(within(question).getAllByRole('button')[0]);
+    fireEvent.click(within(question).getByRole('button', { name: /^A / }));
   }
   await clickButton('Завершить тест');
   assert.ok(screen.getByRole('heading', { name: 'Отличный старт!' }));

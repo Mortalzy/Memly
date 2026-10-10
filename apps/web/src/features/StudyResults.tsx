@@ -2,6 +2,7 @@ import { Check } from 'lucide-react';
 import type { StudySessionDto } from '@memly/contracts';
 import { cardCount } from '../shared/ru';
 import { studyText as text, studyDuration } from '../shared/study-text';
+import { SpeechButton } from '../shared/SpeechButton';
 export function StudyResults({
   session,
   pending,
@@ -91,9 +92,13 @@ export function StudyResults({
               key={row.cardId}
               className={row.mistakes || !row.correct ? 'study-result-error' : ''}
             >
-              <strong>{row.prompt}</strong>
-              <p>
+              <div className="spoken-heading">
+                <strong>{row.prompt}</strong>
+                <SpeechButton text={row.prompt} />
+              </div>
+              <p className="spoken-answer">
                 {text.expected}: {row.expected}
+                <SpeechButton text={row.expected} />
               </p>
               <p>
                 {text.yourAnswer}: {row.answer || '—'} · {text.mistakes}: {row.mistakes}
