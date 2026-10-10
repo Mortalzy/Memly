@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, CalendarDays, CheckCircle2, Flame, GraduationCap } from 'lucide-react';
 import type { StudyActivity, StudyHistoryItem, StudyMode } from '@memly/contracts';
-import { Icon, PageHeading, modes } from '../shared/ui';
+import { Icon, PageHeading, activityModes } from '../shared/ui';
 import { studyClient } from '../features/study-client';
 import { StudyHistory } from '../features/StudyHistory';
 import { ActivityChart } from '../features/ActivityChart';
@@ -141,7 +141,7 @@ export function Progress({
                     onChange={(event) => setMode(event.target.value as StudyMode | '')}
                   >
                     <option value="">{text.allModes}</option>
-                    {modes.map((value) => (
+                    {activityModes.map((value) => (
                       <option key={value} value={value}>
                         {ru[value]}
                       </option>
@@ -166,7 +166,7 @@ export function Progress({
               <strong className="progress-today-value">{todayCount}</strong>
               <p>{text.todayHint}</p>
               <div className="progress-mode-counts">
-                {modes.map((value) => (
+                {activityModes.map((value) => (
                   <div key={value}>
                     <Icon name={value} size={23} />
                     <span>{ru[value]}</span>

@@ -18,6 +18,7 @@ import { QuestionInput } from '../features/StudyQuestionInput';
 import { StudySetup } from '../features/StudySetup';
 import { StudyResults } from '../features/StudyResults';
 import { PrototypeStudy } from './PrototypeStudy';
+import { Scanword } from './Scanword';
 
 export function Study(props: {
   deck: Deck;
@@ -27,6 +28,15 @@ export function Study(props: {
   saved?: () => Promise<void>;
   sessionId?: string;
 }) {
+  if (props.mode === 'scanword')
+    return (
+      <Scanword
+        deck={props.deck}
+        back={props.back}
+        saved={props.saved}
+        sessionId={props.sessionId}
+      />
+    );
   return props.saved ? <SessionStudy {...props} /> : <PrototypeStudy {...props} />;
 }
 function draftsEqual(left: Record<string, string>, right: Record<string, string>): boolean {

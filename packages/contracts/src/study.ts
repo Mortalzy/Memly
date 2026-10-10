@@ -1,6 +1,7 @@
 import { z } from 'zod';
+import type { ScanwordBoardDto } from './scanword.ts';
 
-export const studyModeSchema = z.enum(['cards', 'learn', 'test', 'match']);
+export const studyModeSchema = z.enum(['cards', 'learn', 'test', 'match', 'scanword']);
 export const studyOptionsSchema = z.strictObject({
   direction: z.enum(['forward', 'reverse']).default('forward'),
   answerType: z.enum(['choice', 'written', 'mixed']).default('mixed'),
@@ -16,7 +17,15 @@ export const startStudySchema = z.strictObject({
   cardIds: z.array(z.uuid()).min(1).max(500).optional(),
 });
 const questionId = z.string().min(1).max(80);
+const scanwordCells = z
+  .array(z.strictObject({ key: z.string().max(40), value: z.string().max(1) }))
+  .max(484);
+const scanwordRound = z.number().int().min(1).max(500);
 export const studyActionSchema = z.discriminatedUnion('type', [
+  z.strictObject({ type: z.literal('scanword-draft'), round: scanwordRound, cells: scanwordCells }),
+  z.strictObject({ type: z.literal('scanword-check'), round: scanwordRound, cells: scanwordCells }),
+  z.strictObject({ type: z.literal('scanword-hint'), round: scanwordRound, wordId: questionId }),
+  z.strictObject({ type: z.literal('scanword-next'), round: scanwordRound }),
   z.strictObject({ type: z.literal('rate'), questionId, known: z.boolean() }),
   z.strictObject({ type: z.literal('answer'), questionId, value: z.string().max(5000) }),
   z.strictObject({ type: z.literal('next') }),
@@ -57,6 +66,7 @@ export interface StudyFeedback {
 export interface StudyResultRow extends StudyFeedback {
   cardId: string;
   mistakes: number;
+  hints?: number;
 }
 export interface StudySummary {
   total: number;
@@ -66,6 +76,7 @@ export interface StudySummary {
   attempts: number;
   mastered: number;
   score: number;
+  hints?: number;
 }
 export interface StudySessionDto {
   id: string;
@@ -94,6 +105,7 @@ export interface StudySessionDto {
   results: StudyResultRow[];
   bestMs: number | null;
   outdated: boolean;
+  scanword?: ScanwordBoardDto | null;
 }
 export interface StudyHistoryItem {
   id: string;

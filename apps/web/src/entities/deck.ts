@@ -1,4 +1,4 @@
-export type StudyMode = 'cards' | 'learn' | 'test' | 'match';
+export type { StudyMode } from '@memly/contracts';
 export interface Card {
   id: string;
   term: string;

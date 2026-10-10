@@ -10,6 +10,7 @@ import { DeckPage } from '../pages/DeckPage';
 import { Study } from '../pages/Study';
 import { Editor } from '../pages/Editor';
 import { Settings } from '../pages/Settings';
+import { Games } from '../pages/Games';
 import { Modal } from '../shared/Modal';
 import { Icon } from '../shared/ui';
 import { ru } from '../shared/ru';
@@ -59,6 +60,12 @@ export function Workspace({ backend }: { backend?: Backend }) {
     applyTheme(dark ? 'dark' : 'light');
   }, [dark]);
   const go = (path: string) => {
+    if (
+      !window.dispatchEvent(
+        new window.CustomEvent('memly:before-navigate', { cancelable: true, detail: path }),
+      )
+    )
+      return;
     setQuery('');
     navigate(path);
     setMenu(false);
@@ -98,9 +105,12 @@ export function Workspace({ backend }: { backend?: Backend }) {
     setToast(ru.savedDeck);
     openDeck(deck.id);
   };
-  const activePage = ['deck', 'study', 'create', 'edit', 'folder'].includes(route.page)
-    ? 'library'
-    : route.page;
+  const activePage =
+    route.page === 'study' && route.mode === 'scanword'
+      ? 'games'
+      : ['deck', 'study', 'create', 'edit', 'folder'].includes(route.page)
+        ? 'library'
+        : route.page;
   const selectedDeck = 'id' in route ? decks.find((deck) => deck.id === route.id) : undefined;
   const selectedFolder =
     route.page === 'folder' ? folders.find((folder) => folder.id === route.id) : undefined;
@@ -160,6 +170,14 @@ export function Workspace({ backend }: { backend?: Backend }) {
         }
       />
     );
+  else if (route.page === 'games')
+    content = (
+      <Games
+        decks={decks}
+        play={(id) => startStudy(id, 'scanword')}
+        library={() => go('library')}
+      />
+    );
   else if (route.page === 'progress')
     content = (
       <Progress
@@ -216,7 +234,7 @@ export function Workspace({ backend }: { backend?: Backend }) {
         key={`${route.id}-${route.mode}-${route.session ?? ''}`}
         deck={selectedDeck}
         mode={route.mode}
-        back={() => openDeck(selectedDeck.id)}
+        back={() => (route.mode === 'scanword' ? go('games') : openDeck(selectedDeck.id))}
         changeMode={(mode) => startStudy(selectedDeck.id, mode)}
         saved={backend?.studySaved}
         sessionId={route.session}
@@ -269,7 +287,7 @@ export function Workspace({ backend }: { backend?: Backend }) {
           <X size={22} />
         </button>
         <nav aria-label={ru.brand}>
-          {(['home', 'library', 'folders', 'progress'] as const).map((page) => (
+          {(['home', 'library', 'folders', 'games', 'progress'] as const).map((page) => (
             <button
               key={page}
               className={`nav-item ${activePage === page ? 'active' : ''}`}
@@ -314,7 +332,7 @@ export function Workspace({ backend }: { backend?: Backend }) {
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);
-                if (route.page !== 'library') navigate('library');
+                if (route.page !== 'library') go('library');
               }}
             />
             {query && (
@@ -466,7 +484,7 @@ export function Workspace({ backend }: { backend?: Backend }) {
         <Modal title={ru.helpTitle} close={closeModal}>
           <p>
             {backend
-              ? 'Наборы, карточки, папки и избранное сохраняются в аккаунте. В режиме карточек можно отмечать «Знаю» и «Ещё учу». Все четыре режима сохраняют занятия и результаты. Незавершённое занятие можно продолжить. В тесте ответы проверяются после сдачи, а в заучивании ошибки повторяются.'
+              ? 'Наборы, карточки, папки и избранное сохраняются в аккаунте. В режиме карточек можно отмечать «Знаю» и «Ещё учу». Учебные режимы и сканворд сохраняют занятия и результаты. Незавершённое занятие можно продолжить. В тесте ответы проверяются после сдачи, а в заучивании ошибки повторяются.'
               : ru.helpText}
           </p>
           <button className="primary" onClick={closeModal}>

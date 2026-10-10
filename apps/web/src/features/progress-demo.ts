@@ -13,9 +13,9 @@ export function progressDemo(query: ActivityQuery): StudyActivity {
       completed: query.mode ? Math.floor(count / 2) : count,
     };
   });
-  const todayByMode = { cards: 2, learn: 1, test: 1, match: 1 };
+  const todayByMode = { cards: 2, learn: 1, test: 1, match: 1, scanword: 0 };
   if (query.mode) {
-    for (const mode of ['cards', 'learn', 'test', 'match'] as const)
+    for (const mode of ['cards', 'learn', 'test', 'match', 'scanword'] as const)
       if (mode !== query.mode) todayByMode[mode] = 0;
     days[days.length - 1].completed = todayByMode[query.mode];
   }

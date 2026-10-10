@@ -25,13 +25,19 @@ const response = (days, mode) => ({
   completed: mode ? 1 : 4,
   activeDays: 1,
   streak: 1,
-  todayByMode: { cards: mode ? 0 : 1, learn: mode ? 0 : 1, test: 1, match: mode ? 0 : 1 },
+  todayByMode: {
+    cards: mode ? 0 : 1,
+    learn: mode ? 0 : 1,
+    test: mode === 'scanword' ? 0 : 1,
+    match: mode ? 0 : 1,
+    scanword: mode === 'scanword' ? 1 : 0,
+  },
   history: [
     {
       id: 'result',
       deckId: 'deck',
       deckTitle: 'Основные глаголы',
-      mode: 'test',
+      mode: mode === 'scanword' ? 'scanword' : 'test',
       status: 'completed',
       startedAt: '2026-10-08T18:00:00Z',
       completedAt: '2026-10-08T21:30:00Z',
@@ -104,7 +110,7 @@ test('zero activity displays zero bars and useful empty state', async () => {
       completed: 0,
       activeDays: 0,
       streak: 0,
-      todayByMode: { cards: 0, learn: 0, test: 0, match: 0 },
+      todayByMode: { cards: 0, learn: 0, test: 0, match: 0, scanword: 0 },
       history: [],
     });
   };

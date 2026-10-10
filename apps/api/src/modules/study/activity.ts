@@ -27,7 +27,7 @@ export function activityTotals(
   today: string,
 ): Omit<StudyActivity, 'history'> {
   const daily = new Map<string, number>();
-  const todayByMode = { cards: 0, learn: 0, test: 0, match: 0 };
+  const todayByMode = { cards: 0, learn: 0, test: 0, match: 0, scanword: 0 };
   for (const row of counts) {
     if (row.date > today || (query.mode && row.mode !== query.mode)) continue;
     daily.set(row.date, (daily.get(row.date) ?? 0) + row.completed);

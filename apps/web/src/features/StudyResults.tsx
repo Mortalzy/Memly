@@ -3,6 +3,7 @@ import type { StudySessionDto } from '@memly/contracts';
 import { cardCount } from '../shared/ru';
 import { studyText as text, studyDuration } from '../shared/study-text';
 import { SpeechButton } from '../shared/SpeechButton';
+import { scanwordText } from '../shared/scanword-text';
 export function StudyResults({
   session,
   pending,
@@ -24,13 +25,15 @@ export function StudyResults({
         </span>
         <h2>{session.status === 'completed' ? text.result : text.abandoned}</h2>
         <span className="eyebrow">
-          {mode === 'learn'
-            ? text.firstPass
-            : mode === 'cards'
-              ? text.known
-              : mode === 'match'
-                ? text.matched
-                : text.correctCount}
+          {mode === 'scanword'
+            ? scanwordText.independent
+            : mode === 'learn'
+              ? text.firstPass
+              : mode === 'cards'
+                ? text.known
+                : mode === 'match'
+                  ? text.matched
+                  : text.correctCount}
         </span>
         <div className="result-score">
           {session.summary.score}
@@ -43,6 +46,12 @@ export function StudyResults({
           {text.mastered}: {cardCount(session.summary.mastered)}
           <br />
           {text.elapsed}: {studyDuration(session.elapsedMs)}
+          {mode === 'scanword' && (
+            <>
+              <br />
+              {scanwordText.hints}: {session.summary.hints ?? 0}
+            </>
+          )}
           {session.bestMs !== null && (
             <>
               <br />
@@ -64,21 +73,22 @@ export function StudyResults({
           >
             {text.again}
           </button>
-          {session.results.some((row) => row.mistakes || !row.correct) && !session.outdated && (
-            <button
-              className="secondary"
-              disabled={pending}
-              onClick={() =>
-                void onStart(
-                  session.results
-                    .filter((row) => row.mistakes || !row.correct)
-                    .map((row) => row.cardId),
-                )
-              }
-            >
-              {text.repeatMistakes}
-            </button>
-          )}
+          {session.results.some((row) => row.mistakes || row.hints || !row.correct) &&
+            !session.outdated && (
+              <button
+                className="secondary"
+                disabled={pending}
+                onClick={() =>
+                  void onStart(
+                    session.results
+                      .filter((row) => row.mistakes || row.hints || !row.correct)
+                      .map((row) => row.cardId),
+                  )
+                }
+              >
+                {text.repeatMistakes}
+              </button>
+            )}
           <button className="secondary" onClick={() => onSetup()}>
             {text.setup}
           </button>
@@ -90,7 +100,7 @@ export function StudyResults({
           {session.results.map((row) => (
             <article
               key={row.cardId}
-              className={row.mistakes || !row.correct ? 'study-result-error' : ''}
+              className={row.mistakes || row.hints || !row.correct ? 'study-result-error' : ''}
             >
               <div className="spoken-heading">
                 <strong>{row.prompt}</strong>
@@ -102,6 +112,12 @@ export function StudyResults({
               </p>
               <p>
                 {text.yourAnswer}: {row.answer || '—'} · {text.mistakes}: {row.mistakes}
+                {mode === 'scanword' && (
+                  <>
+                    {' '}
+                    · {scanwordText.hints}: {row.hints ?? 0}
+                  </>
+                )}
               </p>
             </article>
           ))}

@@ -8,12 +8,14 @@ import {
   Code2,
   Copy,
   Folder,
+  Gamepad2,
   House,
   Layers2,
   Leaf,
   Link2,
   ListChecks,
   Repeat2,
+  Puzzle,
   Settings,
   Star,
 } from 'lucide-react';
@@ -25,6 +27,8 @@ export const icons = {
   library: BookOpen,
   folders: Folder,
   progress: ChartNoAxesColumnIncreasing,
+  games: Gamepad2,
+  scanword: Puzzle,
   cards: Copy,
   learn: Repeat2,
   test: ListChecks,
@@ -83,6 +87,7 @@ export function PageHeading({
   );
 }
 export const modes: StudyMode[] = ['cards', 'learn', 'test', 'match'];
+export const activityModes: StudyMode[] = [...modes, 'scanword'];
 export function Modes({
   onSelect,
   active,

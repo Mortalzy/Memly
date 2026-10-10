@@ -102,12 +102,24 @@ export function createStudySessionService(db: PrismaClient) {
             );
           if (!cards.length)
             throw new AppError(400, 'NO_CARDS', 'Нет карточек для выбранного фильтра');
-          const state = createStudyState(
-            cards.map(({ id, term, definition, revision }) => ({ id, term, definition, revision })),
-            input.mode,
-            input.options,
-            () => randomInt(0, 0x100000000) / 0x100000000,
-          );
+          let state: StudyState;
+          try {
+            state = createStudyState(
+              cards.map(({ id, term, definition, revision }) => ({
+                id,
+                term,
+                definition,
+                revision,
+              })),
+              input.mode,
+              input.options,
+              () => randomInt(0, 0x100000000) / 0x100000000,
+            );
+          } catch (error) {
+            if (error instanceof StudyRuleError)
+              throw new AppError(400, 'STUDY_RULE', error.message);
+            throw error;
+          }
           const active = await tx.studySession.findMany({
             where: { userId, deckId: deck.id, mode: input.mode, status: 'active' },
           });

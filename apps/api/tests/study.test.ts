@@ -310,7 +310,7 @@ test('server study sessions with PostgreSQL', { skip: !databaseUrl }, async (t) 
       assert.equal(result.days.at(-2).completed, 1);
       assert.equal(result.activeDays, 3);
       assert.equal(result.streak, 3);
-      assert.deepEqual(result.todayByMode, { cards: 2, learn: 1, test: 1, match: 1 });
+      assert.deepEqual(result.todayByMode, { cards: 2, learn: 1, test: 1, match: 1, scanword: 0 });
       assert.equal(result.history.length, 7);
       assert.ok(result.history.every((item: { status: string }) => item.status === 'completed'));
       const filtered = (await alice.get(`${url}&mode=match`).expect(200)).body;

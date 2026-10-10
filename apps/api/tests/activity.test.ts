@@ -29,7 +29,7 @@ test('empty days remain zero and repeats in different modes count independently'
   assert.equal(result.completed, 6);
   assert.equal(result.activeDays, 2);
   assert.equal(result.streak, 2);
-  assert.deepEqual(result.todayByMode, { cards: 0, learn: 0, test: 1, match: 3 });
+  assert.deepEqual(result.todayByMode, { cards: 0, learn: 0, test: 1, match: 3, scanword: 0 });
   const filtered = activityTotals(
     [
       { date: '2026-10-09', mode: 'cards', completed: 2 },

@@ -8,6 +8,16 @@ import type {
   StudyResultRow,
   StudySummary,
 } from '@memly/contracts';
+import { requireRule } from './rules.ts';
+import {
+  applyScanword,
+  createScanword,
+  scanwordResults,
+  scanwordSummary,
+  scanwordView,
+  type ScanwordState,
+} from './scanword.ts';
+export { StudyRuleError } from './rules.ts';
 
 interface Question extends StudyQuestion {
   cardIndex: number;
@@ -42,15 +52,12 @@ export interface StudyState {
   rounds: Round[];
   round: number;
   status: 'active' | 'completed' | 'abandoned';
+  scanword?: ScanwordState;
 }
 export interface Assessment {
   card: CardDto;
   known: boolean;
 }
-export class StudyRuleError extends Error {}
-const requireRule = (condition: unknown, message: string) => {
-  if (!condition) throw new StudyRuleError(message);
-};
 export function normalizeAnswer(value: string): string {
   return value
     .normalize('NFKC')
@@ -82,6 +89,24 @@ export function createStudyState(
 ): StudyState {
   requireRule(cards.length > 0, 'Нет карточек для занятия');
   const selected = (options.shuffle ? shuffle(cards, random) : [...cards]).slice(0, options.count);
+  if (mode === 'scanword')
+    return {
+      version: 1,
+      mode,
+      options,
+      cards: selected,
+      questions: [],
+      queue: [],
+      drafts: {},
+      ratings: {},
+      attempts: [],
+      feedback: null,
+      cursor: 0,
+      rounds: [],
+      round: 0,
+      status: 'active',
+      scanword: createScanword(selected, options, random),
+    };
   const questions: Question[] = [];
   selected.forEach((card, cardIndex) => {
     const stages = mode === 'learn' && options.answerType === 'mixed' ? 2 : 1;
@@ -180,6 +205,13 @@ export function applyStudyAction(
     state.status = 'abandoned';
     return { state, assessments };
   }
+  if (state.mode === 'scanword') {
+    requireRule(state.scanword, 'Сетка недоступна');
+    const result = applyScanword(state.scanword, action, state.cards);
+    if (result.completed) state.status = 'completed';
+    return { state, assessments: result.assessments };
+  }
+  requireRule(!action.type.startsWith('scanword-'), 'Это действие доступно только в сканворде');
   if (action.type === 'navigate') {
     requireRule(
       state.mode === 'cards' && action.index < state.questions.length,
@@ -285,6 +317,8 @@ export function applyStudyAction(
   return { state, assessments };
 }
 export function studySummary(state: StudyState): StudySummary {
+  if (state.mode === 'scanword' && state.scanword)
+    return scanwordSummary(state.scanword, state.cards);
   const total = state.mode === 'learn' ? state.questions.length : state.cards.length;
   const first = state.attempts.filter((item) => item.first);
   const answered =
@@ -323,6 +357,8 @@ export function studySummary(state: StudyState): StudySummary {
   };
 }
 export function studyResults(state: StudyState): StudyResultRow[] {
+  if (state.mode === 'scanword' && state.scanword)
+    return scanwordResults(state.scanword, state.cards);
   return state.cards.map((card, i) => {
     const attempts = state.attempts.filter((a) => a.cardIndex === i);
     const last = attempts.at(-1);
@@ -382,5 +418,9 @@ export function studyView(state: StudyState) {
           }
         : null,
     results: state.status === 'completed' ? studyResults(state) : [],
+    scanword:
+      state.mode === 'scanword' && state.scanword
+        ? scanwordView(state.scanword, state.cards)
+        : null,
   };
 }
