@@ -23,7 +23,7 @@ function dto() {
     deckId: null,
     levelId: 'warmup',
     deckTitle: 'Уровень 1: Разминка',
-    deckRevision: 1,
+    deckRevision: 2,
     mode: 'scanword',
     options: current.state.options,
     revision: current.revision,
@@ -129,8 +129,7 @@ async function start() {
   await open();
   await screen.findByRole('region', { name: 'Сканворд' });
 }
-const apple = () =>
-  screen.getAllByRole('textbox', { name: /Домашний питомец, который мяукает: буква/ });
+const cat = () => screen.getAllByRole('textbox', { name: /A small pet that says meow\.: буква/ });
 async function clickReady(name) {
   const button = screen.getByRole('button', { name, exact: true });
   await waitFor(() => assert.equal(button.disabled, false));
@@ -194,25 +193,48 @@ test('signed-in level deep links open the board without requesting a deck', asyn
   );
   assert.equal(starts.length, 1);
 });
+test('full English clues remain in the numbered list and select the matching word', async () => {
+  await start();
+  const questions = [...document.querySelectorAll('.scanword-question')];
+  assert.equal(questions.length, 6);
+  for (const [index, word] of dto().scanword.words.entries()) {
+    assert.ok(questions[index].textContent.includes(word.clue));
+    assert.equal(questions[index].querySelector('[lang=en]').textContent, word.clue);
+  }
+  assert.ok(
+    [...document.querySelectorAll('.scanword-clue span')].every((cell) =>
+      /^\d+$/.test(cell.textContent),
+    ),
+  );
+  fireEvent.click(questions[4]);
+  await screen.findByRole('heading', { name: 'You use it to write with ink.' });
+  assert.equal(questions[4].getAttribute('aria-pressed'), 'true');
+  const pen = screen.getAllByRole('textbox', { name: /You use it to write with ink\.: буква/ });
+  assert.equal(document.activeElement, pen[0]);
+  fireEvent.change(pen[0], { target: { value: 'П' } });
+  assert.equal(pen[0].value, '');
+  fireEvent.paste(pen[0], { clipboardData: { getData: () => 'pen' } });
+  assert.equal(pen.map((input) => input.value).join(''), 'PEN');
+});
 test('typing advances focus; paste fills a word; server checks and hints produce an honest saved result', async () => {
   await start();
-  let inputs = apple();
+  let inputs = cat();
   fireEvent.focus(inputs[0]);
-  fireEvent.change(inputs[0], { target: { value: 'к' } });
-  assert.equal(document.activeElement, apple()[1]);
-  fireEvent.keyDown(apple()[1], { key: 'Backspace' });
-  assert.equal(document.activeElement, apple()[0]);
-  fireEvent.paste(apple()[0], { clipboardData: { getData: () => 'кот' } });
+  fireEvent.change(inputs[0], { target: { value: 'c' } });
+  assert.equal(document.activeElement, cat()[1]);
+  fireEvent.keyDown(cat()[1], { key: 'Backspace' });
+  assert.equal(document.activeElement, cat()[0]);
+  fireEvent.paste(cat()[0], { clipboardData: { getData: () => 'cat' } });
   assert.equal(
-    apple()
+    cat()
       .map((input) => input.value)
       .join(''),
-    'КОТ',
+    'CAT',
   );
   await clickReady('Проверить');
   await waitFor(() => assert.equal(studyView(current.state).summary.answered, 1));
-  const pearInputs = screen.getAllByRole('textbox', { name: /Здание, в котором живут: буква/ });
-  fireEvent.focus(pearInputs[0]);
+  const hatInputs = screen.getAllByRole('textbox', { name: /You wear it on your head\.: буква/ });
+  fireEvent.focus(hatInputs[0]);
   await clickReady('Открыть букву');
   await waitFor(() => assert.equal(studyView(current.state).summary.hints, 1));
   const board = current.state.scanword.boards[0];
@@ -252,7 +274,7 @@ test('typing advances focus; paste fills a word; server checks and hints produce
 test('lost draft response retries the same event, and reopening restores the original grid and letters', async () => {
   await start();
   loseResponse = true;
-  fireEvent.change(apple()[0], { target: { value: 'к' } });
+  fireEvent.change(cat()[0], { target: { value: 'c' } });
   await screen.findByRole('alert');
   const first = events.at(-1);
   await clickReady('Повторить действие');
@@ -262,29 +284,29 @@ test('lost draft response retries the same event, and reopening restores the ori
   cleanup();
   renderGame();
   await screen.findByRole('region', { name: 'Сканворд' });
-  assert.equal(apple()[0].value, 'К');
+  assert.equal(cat()[0].value, 'C');
   assert.deepEqual(dto().scanword, board);
   assert.equal(saved, 0);
 });
 test('edits made while autosave is in flight are preserved and saved in a second revision', async () => {
   await start();
   holdDraft = true;
-  fireEvent.change(apple()[0], { target: { value: 'К' } });
+  fireEvent.change(cat()[0], { target: { value: 'C' } });
   await waitFor(() => assert.ok(releaseDraft));
-  fireEvent.change(apple()[1], { target: { value: 'О' } });
+  fireEvent.change(cat()[1], { target: { value: 'A' } });
   await act(async () => releaseDraft());
   await waitFor(
     () =>
       assert.equal(studyView(current.state).scanword.cells.filter((cell) => cell.value).length, 2),
     { timeout: 2500 },
   );
-  assert.equal(apple()[0].value, 'К');
-  assert.equal(apple()[1].value, 'О');
+  assert.equal(cat()[0].value, 'C');
+  assert.equal(cat()[1].value, 'A');
   await screen.findByText('Сохранено');
 });
 test('sidebar navigation flushes the latest letters before changing route', async () => {
   await start();
-  fireEvent.change(apple()[0], { target: { value: 'К' } });
+  fireEvent.change(cat()[0], { target: { value: 'C' } });
   let allowed;
   await act(async () => {
     allowed = window.dispatchEvent(
@@ -351,9 +373,9 @@ test('scanword filter and history result are available in the progress page', as
 test('leaving through browser history saves letters before the debounce', async () => {
   const view = renderGame();
   await screen.findByRole('region', { name: 'Сканворд' });
-  fireEvent.change(apple()[0], { target: { value: 'К' } });
+  fireEvent.change(cat()[0], { target: { value: 'C' } });
   view.unmount();
   await waitFor(() => assert.equal(events.length, 1));
   assert.equal(events[0].action.type, 'scanword-draft');
-  assert.equal(events[0].action.cells[0].value, 'К');
+  assert.equal(events[0].action.cells[0].value, 'C');
 });

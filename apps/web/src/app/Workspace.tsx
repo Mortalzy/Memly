@@ -435,7 +435,7 @@ export function Workspace({ backend }: { backend?: Backend }) {
         <main
           id="main-content"
           tabIndex={-1}
-          className={`main-content ${route.page === 'study' ? 'study-main' : ''}`}
+          className={`main-content ${route.page === 'study' ? 'study-main' : ''} ${route.page === 'scanword-level' || (route.page === 'study' && route.mode === 'scanword') ? 'scanword-main' : ''}`}
           key={route.page}
         >
           <div className="page-content">

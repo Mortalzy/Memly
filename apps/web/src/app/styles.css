@@ -3779,8 +3779,52 @@ textarea {
 .scanword-excluded strong {
   color: var(--text);
 }
+.scanword-main {
+  padding: 22px 28px;
+}
+.scanword-main .page-content {
+  max-width: none;
+}
+.scanword-main .page-footer {
+  display: none;
+}
+.scanword-game-heading {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  margin-bottom: 18px;
+}
+.scanword-game-heading .back-link,
+.scanword-game-heading .page-heading {
+  margin: 0;
+}
+.scanword-game-heading .back-link {
+  flex-shrink: 0;
+}
+.scanword-game-heading h1 {
+  font-size: 25px;
+}
+.scanword-game-heading .page-heading p {
+  margin-top: 5px;
+  font-size: 12px;
+}
+.scanword-page.is-playing {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: calc(100dvh - 122px);
+  min-height: 460px;
+  padding-bottom: 0;
+}
+.is-playing .scanword-game-heading {
+  margin-bottom: 0;
+}
 .scanword-board-panel {
-  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 18px;
 }
 .scanword-round-header {
   display: flex;
@@ -3788,20 +3832,24 @@ textarea {
   justify-content: space-between;
   gap: 12px;
 }
+.scanword-round-header h2 {
+  font-size: 18px;
+}
 .scanword-round-header > span {
   display: flex;
   align-items: center;
   gap: 8px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 .scanword-progress {
   display: flex;
   align-items: center;
   gap: 15px;
-  margin: 18px 0 24px;
+  margin: 12px 0 18px;
 }
 .scanword-progress .progress-track {
-  max-width: 370px;
+  max-width: none;
   flex: 1;
 }
 .scanword-progress > span {
@@ -3810,65 +3858,78 @@ textarea {
 }
 .scanword-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 250px;
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr) 310px;
+  grid-template-rows: minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
   gap: 24px;
 }
-.scanword-scroll {
-  overflow: auto;
-  max-height: 660px;
-  padding: 3px 3px 14px;
-  scrollbar-color: var(--track) transparent;
+.scanword-stage {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg);
+  border-radius: 10px;
 }
 .scanword-grid {
-  --scanword-cell: 56px;
   display: grid;
   grid-template-columns: repeat(var(--columns), var(--scanword-cell));
   grid-auto-rows: var(--scanword-cell);
-  gap: 2px;
+  gap: 1px;
   width: max-content;
-  margin: 0 auto;
-  background: var(--border);
   border: 1px solid var(--border);
+  background: var(--border);
 }
 .scanword-block {
   background: var(--game-block);
 }
 .scanword-clue {
+  position: relative;
   display: flex;
   align-items: center;
-  flex-direction: column;
   justify-content: center;
-  gap: 2px;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  min-height: 0;
   background: var(--rose-light);
-  padding: 4px;
-  overflow: hidden;
+  padding: 0;
+  color: var(--rose);
 }
 .scanword-clue span {
-  font-size: 10px;
-  line-height: 1.15;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  overflow-wrap: anywhere;
+  position: absolute;
+  top: 8%;
+  left: 12%;
+  font-size: clamp(7px, calc(var(--scanword-cell) * 0.3), 20px);
+  font-weight: 700;
+  line-height: 1;
+}
+.scanword-clue svg {
+  position: absolute;
+  bottom: 8%;
+  right: 8%;
+  width: clamp(5px, calc(var(--scanword-cell) * 0.28), 18px);
+  height: clamp(5px, calc(var(--scanword-cell) * 0.28), 18px);
+  flex-shrink: 0;
 }
 .scanword-clue.is-selected {
   background: var(--rose-soft);
-  color: var(--rose);
 }
 .scanword-letter {
   display: block;
   width: 100%;
+  height: 100%;
   min-width: 0;
+  min-height: 0;
   padding: 0;
   border: 0;
   border-radius: 0;
   color: var(--text);
   background: var(--surface);
   text-align: center;
-  font-size: 25px;
-  font-weight: 500;
+  font-size: clamp(10px, calc(var(--scanword-cell) * 0.52), 38px);
+  font-weight: 600;
   caret-color: var(--rose);
 }
 .scanword-letter.is-selected {
@@ -3890,73 +3951,131 @@ textarea {
   outline-offset: -2px;
   box-shadow: none;
 }
-.scanword-selected {
+.scanword-questions {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
   border-left: 1px solid var(--border);
   padding-left: 22px;
-  min-width: 0;
+}
+.scanword-selected {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
 }
 .scanword-clue-title {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 10px;
-  margin: 15px 0 9px;
+  margin: 8px 0;
 }
 .scanword-clue-title h2 {
-  font-size: 24px;
-  line-height: 1.3;
+  font-size: 18px;
+  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 .scanword-clue-title > svg {
   color: var(--rose);
+  flex-shrink: 0;
 }
 .scanword-selected > p {
   font-size: 12px;
   color: var(--muted);
 }
-.scanword-input-hint {
-  margin-top: 24px;
-}
-.scanword-preview {
+.scanword-selected-meta {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   flex-wrap: wrap;
-  gap: 4px;
-  margin: 16px 0 20px;
+  gap: 8px;
+  margin-top: 10px;
 }
-.scanword-preview span {
-  display: grid;
-  place-items: center;
-  min-width: 28px;
-  height: 38px;
-  flex: 1;
-  max-width: 44px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  font-size: 18px;
-}
-.scanword-preview span.active {
-  border-color: var(--rose);
-  background: var(--rose-light);
+.scanword-selected-meta p {
+  font-size: 11px;
+  color: var(--muted);
 }
 .scanword-hint {
-  width: 100%;
+  padding: 8px 10px;
   color: var(--rose);
   border-color: var(--rose);
+  font-size: 11px;
 }
-.scanword-hint-notice {
-  margin-top: 20px;
-  padding-top: 17px;
-  border-top: 1px solid var(--border);
+.scanword-questions > h3 {
+  margin: 14px 0 8px;
+  font-size: 13px;
 }
-.scanword-keyboard {
-  margin-top: 34px;
+.scanword-question-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0 4px 0 0;
+  list-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--track) transparent;
+}
+.scanword-question {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  width: 100%;
+  padding: 10px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  text-align: left;
+  color: var(--text);
+}
+.scanword-question.is-selected {
+  background: var(--rose-light);
+  border-color: var(--rose-soft);
+}
+.scanword-question.is-solved > svg {
+  color: var(--game-solved-text);
+}
+.scanword-question > svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: var(--muted);
+}
+.scanword-question-number {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 23px;
+  height: 23px;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+}
+.scanword-question-copy {
+  min-width: 0;
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.scanword-question-copy small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 10px;
 }
 .scanword-bottom {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 15px;
-  margin-top: 18px;
+  flex-shrink: 0;
+  margin-top: 14px;
+}
+.is-playing .scanword-bottom {
+  margin: 0;
+}
+.scanword-bottom .study-actions {
+  margin: 0;
 }
 .scanword-save-status {
   color: var(--muted);
@@ -3964,29 +4083,115 @@ textarea {
 }
 .scanword-check-message {
   color: var(--game-solved-text);
-  margin-top: 18px;
-  font-size: 14px;
+  font-size: 12px;
+  margin: 0;
 }
 .scanword-check-message.has-errors {
   color: #b64760;
 }
+.is-playing > .keyboard-hint {
+  margin: 0;
+  font-size: 10px;
+}
+@media (max-width: 1100px) {
+  .scanword-main {
+    padding: 18px;
+  }
+  .scanword-page.is-playing {
+    height: calc(100dvh - 114px);
+  }
+  .scanword-layout {
+    grid-template-columns: minmax(0, 1fr) 265px;
+    gap: 16px;
+  }
+  .scanword-questions {
+    padding-left: 16px;
+  }
+}
+@media (max-width: 850px) {
+  .scanword-main {
+    padding: 14px;
+  }
+  .scanword-page.is-playing {
+    height: auto;
+    min-height: 0;
+  }
+  .scanword-game-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .scanword-game-heading h1 {
+    font-size: 21px;
+  }
+  .scanword-game-heading .page-heading p {
+    display: none;
+  }
+  .scanword-board-panel {
+    padding: 14px;
+  }
+  .scanword-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto;
+    gap: 12px;
+  }
+  .scanword-stage {
+    grid-row: 2;
+    aspect-ratio: var(--board-ratio);
+    max-height: max(160px, calc(100svh - 460px));
+    width: 100%;
+  }
+  .scanword-questions {
+    display: contents;
+  }
+  .scanword-selected {
+    grid-row: 1;
+    padding-bottom: 12px;
+  }
+  .scanword-selected .scanword-hint {
+    width: auto;
+    margin-top: 0;
+  }
+  .scanword-questions > h3 {
+    grid-row: 3;
+    margin: 8px 0 0;
+  }
+  .scanword-question-list {
+    grid-row: 4;
+    overflow: visible;
+  }
+  .scanword-progress {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .scanword-progress > span {
+    font-size: 11px;
+  }
+  .scanword-bottom {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+    position: sticky;
+    bottom: 0;
+    z-index: 4;
+    padding: 10px 0;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+  }
+  .scanword-bottom .study-actions {
+    gap: 8px;
+  }
+  .scanword-bottom .study-actions button {
+    padding: 11px 13px;
+    font-size: 12px;
+  }
+}
+
 [data-theme='dark'] {
   --game-block: #252631;
   --game-solved: #203d31;
   --game-solved-text: #b1dfc1;
   --game-error: #472832;
-}
-@media (max-width: 1100px) {
-  .scanword-layout {
-    grid-template-columns: minmax(0, 1fr) 220px;
-    gap: 16px;
-  }
-  .scanword-grid {
-    --scanword-cell: 48px;
-  }
-  .scanword-selected {
-    padding-left: 16px;
-  }
 }
 @media (max-width: 700px) {
   .game-card {
@@ -3999,53 +4204,6 @@ textarea {
   .game-decks,
   .scanword-setup {
     padding: 20px;
-  }
-  .scanword-board-panel {
-    padding: 14px;
-  }
-  .scanword-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .scanword-selected {
-    grid-row: 1;
-    border-left: 0;
-    padding: 0 0 18px;
-    border-bottom: 1px solid var(--border);
-  }
-  .scanword-clue-title {
-    margin-top: 9px;
-  }
-  .scanword-input-hint,
-  .scanword-preview,
-  .scanword-hint-notice,
-  .scanword-keyboard {
-    display: none;
-  }
-  .scanword-hint {
-    width: auto;
-    padding: 9px 14px;
-    margin-top: 12px;
-  }
-  .scanword-progress {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 9px;
-  }
-  .scanword-progress .progress-track {
-    width: 100%;
-    flex: auto;
-  }
-  .scanword-bottom {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-  .scanword-deck-bar {
-    padding: 13px;
-    gap: 11px;
-  }
-  .scanword-deck-bar > div {
-    min-width: 0;
-    overflow-wrap: anywhere;
   }
 }
 

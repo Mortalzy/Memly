@@ -142,7 +142,7 @@ test(
     const draft: StudyAction = {
       type: 'scanword-draft',
       round: 1,
-      cells: [{ key: first.key, value: 'я' }],
+      cells: [{ key: first.key, value: 'z' }],
     };
     session = await act(session, draft, draftId);
     assert.equal((await act(before, draft, draftId)).revision, session.revision);
@@ -151,7 +151,7 @@ test(
     assert.deepEqual(restored.scanword, session.scanword);
     assert.equal(
       restored.scanword.cells.find((cell: { key: string }) => cell.key === first.key).value,
-      'Я',
+      'Z',
     );
     assert.equal((await levels()).levels[0].activeSessionId, session.id);
     await post(alice, `/study/sessions/${session.id}/events`, {
@@ -227,6 +227,71 @@ test(
     assert.equal(await db.reviewEvent.count({ where: { userId } }), 0);
     assert.equal(await db.cardProgress.count({ where: { userId } }), 0);
     assert.equal(await db.deck.count({ where: { ownerId: userId } }), 0);
+    // The English edition keeps earned checkmarks, but never auto-resumes a Russian board.
+    const bobId = (await bob.get('/api/v1/me').expect(200)).body.id as string;
+    const oldState = createStudyState(
+      [
+        { id: 'old-cat', revision: 1, term: 'КОТ', definition: 'Домашний питомец' },
+        { id: 'old-home', revision: 1, term: 'ДОМ', definition: 'Жилище' },
+      ],
+      'scanword',
+      { direction: 'reverse', answerType: 'written', count: 2, filter: 'all', shuffle: false },
+      () => 0,
+    );
+    await db.studySession.create({
+      data: {
+        userId: bobId,
+        levelKey: 'warmup',
+        requestId: randomUUID(),
+        request: {},
+        mode: 'scanword',
+        deckTitle: 'Уровень 1: Разминка',
+        deckRevision: 1,
+        cardCount: 2,
+        direction: 'reverse',
+        status: 'completed',
+        completedAt: new Date(),
+        summary: JSON.parse(JSON.stringify(studySummary(oldState))) as Prisma.InputJsonValue,
+        state: JSON.parse(
+          JSON.stringify({ ...oldState, status: 'completed' }),
+        ) as Prisma.InputJsonValue,
+      },
+    });
+    const oldActive = await db.studySession.create({
+      data: {
+        userId: bobId,
+        levelKey: 'around-us',
+        requestId: randomUUID(),
+        request: {},
+        mode: 'scanword',
+        deckTitle: 'Уровень 2: Мир вокруг',
+        deckRevision: 1,
+        cardCount: 2,
+        direction: 'reverse',
+        summary: JSON.parse(JSON.stringify(studySummary(oldState))) as Prisma.InputJsonValue,
+        state: JSON.parse(JSON.stringify(oldState)) as Prisma.InputJsonValue,
+      },
+    });
+    assert.equal((await levels(bob)).completed, 1);
+    assert.equal((await levels(bob)).levels[1].unlocked, true);
+    assert.equal((await levels(bob)).levels[1].activeSessionId, null);
+    assert.equal(
+      (await bob.get('/api/v1/games/scanword/levels/around-us/active').expect(200)).body,
+      null,
+    );
+    const oldView = (await bob.get(`/api/v1/study/sessions/${oldActive.id}`).expect(200)).body;
+    assert.equal(oldView.outdated, true);
+    assert.equal(oldView.scanword.words[0].clue, 'Домашний питомец');
+    const english = await start('around-us', randomUUID(), bob);
+    assert.equal(english.deckRevision, 2);
+    assert.ok(english.scanword!.words.every((word) => !/[А-Яа-яЁё]/u.test(word.clue)));
+    assert.equal(
+      (await db.studySession.findUniqueOrThrow({ where: { id: oldActive.id } })).status,
+      'abandoned',
+    );
+    assert.equal((await levels(bob)).levels[1].activeSessionId, english.id);
+    assert.equal((await levels(bob)).completed, 1);
+    assert.equal((await levels()).completed, 5);
     // Old deck-based snapshots still load and remain subject to the deck's access rules.
     const deck = (
       await post(alice, '/decks', {

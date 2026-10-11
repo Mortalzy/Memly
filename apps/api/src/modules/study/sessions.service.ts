@@ -108,7 +108,7 @@ export function createStudySessionService(db: PrismaClient) {
           levelKey: { in: SCANWORD_LEVELS.map((level) => level.id) },
           status: { in: ['active', 'completed'] },
         },
-        select: { id: true, levelKey: true, status: true, completedAt: true },
+        select: { id: true, levelKey: true, deckRevision: true, status: true, completedAt: true },
         orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       });
       const completedKeys = new Set(
@@ -123,7 +123,12 @@ export function createStudySessionService(db: PrismaClient) {
             .find((row) => row.levelKey === level.id && row.status === 'completed')
             ?.completedAt?.toISOString() ?? null,
         activeSessionId:
-          records.find((row) => row.levelKey === level.id && row.status === 'active')?.id ?? null,
+          records.find(
+            (row) =>
+              row.levelKey === level.id &&
+              row.status === 'active' &&
+              row.deckRevision === level.revision,
+          )?.id ?? null,
       }));
       return {
         levels,
@@ -134,7 +139,12 @@ export function createStudySessionService(db: PrismaClient) {
     async activeLevel(userId: string, levelId: ScanwordLevelId): Promise<StudySessionDto | null> {
       await unlocked(db, userId, levelId);
       const session = await db.studySession.findFirst({
-        where: { userId, levelKey: levelId, status: 'active' },
+        where: {
+          userId,
+          levelKey: levelId,
+          status: 'active',
+          deckRevision: SCANWORD_LEVELS.find((level) => level.id === levelId)!.revision,
+        },
         include,
         orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       });

@@ -4,7 +4,7 @@ import { SCANWORD_LEVELS } from '@memly/contracts';
 import { createScanwordLevelState } from '../src/scanword-levels.ts';
 import { applyStudyAction, createStudyState, studyView } from '../src/index.ts';
 
-test('five authored levels use stable single-board layouts, hide solutions and can all be solved', () => {
+test('five English authored levels use stable single-board layouts, hide solutions and can all be solved', () => {
   assert.deepEqual(
     SCANWORD_LEVELS.map((level) => level.wordCount),
     [6, 8, 10, 12, 15],
@@ -12,6 +12,13 @@ test('five authored levels use stable single-board layouts, hide solutions and c
   for (const level of SCANWORD_LEVELS) {
     const state = createScanwordLevelState(level.id);
     assert.deepEqual(state, createScanwordLevelState(level.id));
+    assert.equal(level.revision, 2);
+    assert.ok(
+      state.cards.every(
+        (card) => /^[A-Z]+$/.test(card.term) && !/[А-Яа-яЁё]/u.test(card.definition),
+      ),
+    );
+    assert.ok(state.cards.every((card) => card.definition.length > 10));
     const view = studyView(state).scanword!;
     assert.equal(view.rounds, 1);
     assert.equal(view.words.length, level.wordCount);
@@ -60,7 +67,7 @@ test('authored layouts reject overlapping clues, wrong crossing letters and out-
     createStudyState(original.cards, 'scanword', original.options, () => 0, overlap),
   );
   const wrong = original.cards.map((card, index) =>
-    index === 1 ? { ...card, term: 'ДАА' } : card,
+    index === 1 ? { ...card, term: 'XXX' } : card,
   );
   assert.throws(() => createStudyState(wrong, 'scanword', original.options, () => 0, layout()));
 });

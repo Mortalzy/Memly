@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, ArrowRight, BookOpen, Check, Clock3, Puzzle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpen, Check, Clock3 } from 'lucide-react';
 import { SCANWORD_LEVELS, type ScanwordLevelId } from '@memly/contracts';
 import type { Deck } from '../entities/deck';
 import { PageHeading, ProgressBar } from '../shared/ui';
@@ -29,6 +29,7 @@ export function Scanword({
   const [checked, setChecked] = useState(false);
   const session = game.session;
   const board = session?.scanword;
+  const english = Boolean(level && session && session.deckRevision >= 2);
   const roundDone = board?.words.every((word) => word.solved);
   const next = level ? SCANWORD_LEVELS.find((item) => item.number === level.number + 1) : undefined;
   const start = () => {
@@ -52,31 +53,33 @@ export function Scanword({
     if (value) setChecked(true);
   };
   return (
-    <div className="scanword-page">
-      <button className="back-link" disabled={game.pending} onClick={() => void leave()}>
-        <ArrowLeft size={17} />
-        {text.allLevels}
-      </button>
-      <PageHeading
-        title={level ? `${text.level(level.number)}: ${level.title}` : text.title}
-        subtitle={text.subtitle}
-      />
+    <div className={`scanword-page ${session?.status === 'active' && board ? 'is-playing' : ''}`}>
+      <div className="scanword-game-heading">
+        <button className="back-link" disabled={game.pending} onClick={() => void leave()}>
+          <ArrowLeft size={17} />
+          {text.allLevels}
+        </button>
+        <PageHeading
+          title={level ? `${text.level(level.number)}: ${level.title}` : text.title}
+          subtitle={level ? text.englishSubtitle : text.subtitle}
+        />
+      </div>
       {!saved && <p className="study-notice">{text.demo}</p>}
-      <section className="panel scanword-deck-bar">
-        <span className="scanword-deck-icon">
-          {level ? <Puzzle size={23} /> : <BookOpen size={23} />}
-        </span>
-        <div>
-          <strong>{session?.deckTitle ?? level?.title ?? deck?.title}</strong>
-          <p>
-            {session
-              ? text.solved(session.summary.answered, session.summary.total)
-              : level
-                ? `${text.wordCount(level.wordCount)} · ${text.difficulty[level.difficulty]}`
+      {!level && (
+        <section className="panel scanword-deck-bar">
+          <span className="scanword-deck-icon">
+            <BookOpen size={23} />
+          </span>
+          <div>
+            <strong>{session?.deckTitle ?? deck?.title}</strong>
+            <p>
+              {session
+                ? text.solved(session.summary.answered, session.summary.total)
                 : text.legacyHint}
-          </p>
-        </div>
-      </section>
+            </p>
+          </div>
+        </section>
+      )}
       {game.error && (
         <div className="form-error" role="alert">
           <p>{game.error}</p>
@@ -139,7 +142,12 @@ export function Scanword({
         <>
           {session.outdated && (
             <p className="study-notice" role="status">
-              {studyText.outdated}
+              {level ? text.updated : studyText.outdated}
+              {level && session.status === 'active' && (
+                <button className="secondary" disabled={game.pending} onClick={start}>
+                  {text.startEnglish}
+                </button>
+              )}
             </p>
           )}
           {session.status !== 'active' ? (
@@ -243,6 +251,7 @@ export function Scanword({
                       void game.hint(id);
                     }}
                     check={() => void check()}
+                    english={english}
                   />
                 </section>
                 <div className="scanword-bottom">
@@ -296,7 +305,9 @@ export function Scanword({
                         : text.checked}
                   </p>
                 )}
-                <p className="keyboard-hint">{text.unlimited}</p>
+                <p className="keyboard-hint">
+                  {english ? text.englishInput : text.keyboard} · {text.hintNotice}
+                </p>
               </>
             )
           )}

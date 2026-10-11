@@ -5,23 +5,23 @@ export const startScanwordLevelSchema = z.strictObject({ requestId: z.uuid() });
 export type ScanwordLevelId = z.infer<typeof scanwordLevelIdSchema>;
 export type StartScanwordLevelInput = z.infer<typeof startScanwordLevelSchema>;
 export const SCANWORD_LEVELS = [
-  { id: 'warmup', number: 1, title: 'Разминка', wordCount: 6, difficulty: 'easy', revision: 1 },
+  { id: 'warmup', number: 1, title: 'Разминка', wordCount: 6, difficulty: 'easy', revision: 2 },
   {
     id: 'around-us',
     number: 2,
     title: 'Мир вокруг',
     wordCount: 8,
     difficulty: 'easy',
-    revision: 1,
+    revision: 2,
   },
-  { id: 'nature', number: 3, title: 'Природа', wordCount: 10, difficulty: 'medium', revision: 1 },
+  { id: 'nature', number: 3, title: 'Природа', wordCount: 10, difficulty: 'medium', revision: 2 },
   {
     id: 'science',
     number: 4,
     title: 'Наука и техника',
     wordCount: 12,
     difficulty: 'medium',
-    revision: 1,
+    revision: 2,
   },
   {
     id: 'final',
@@ -29,7 +29,7 @@ export const SCANWORD_LEVELS = [
     title: 'Финальный вызов',
     wordCount: 15,
     difficulty: 'hard',
-    revision: 1,
+    revision: 2,
   },
 ] as const;
 export type ScanwordLevelInfo = (typeof SCANWORD_LEVELS)[number];

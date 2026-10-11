@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent } from 'react';
-import { ArrowDown, ArrowRight, Lightbulb } from 'lucide-react';
+import { ArrowDown, ArrowRight, Check, Lightbulb } from 'lucide-react';
 import type { ScanwordBoardDto, ScanwordCellDto, ScanwordWordDto } from '@memly/contracts';
 import { scanwordText as text } from '../shared/scanword-text';
 
@@ -12,6 +12,7 @@ export function ScanwordBoard({
   pending,
   hint,
   check,
+  english = false,
 }: {
   board: ScanwordBoardDto;
   drafts: Record<string, string>;
@@ -20,10 +21,13 @@ export function ScanwordBoard({
   pending: boolean;
   hint: (wordId: string) => void;
   check: () => void;
+  english?: boolean;
 }) {
   const [selection, setSelection] = useState('');
   const [activeCell, setActiveCell] = useState('');
   const fields = useRef(new Map<string, HTMLInputElement>());
+  const stage = useRef<HTMLDivElement>(null);
+  const [cellSize, setCellSize] = useState(24);
   const word = board.words.find((item) => item.id === selection) ?? board.words[0];
   const letters = (item: ScanwordWordDto) =>
     board.cells
@@ -34,7 +38,6 @@ export function ScanwordBoard({
     setSelection(selected);
     setActiveCell(cell.key);
     fields.current.get(cell.key)?.focus({ preventScroll: true });
-    fields.current.get(cell.key)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   }
   function choose(item: ScanwordWordDto) {
     const cells = letters(item);
@@ -50,10 +53,31 @@ export function ScanwordBoard({
     setSelection(first.id);
     setActiveCell(letters(first).find((cell) => !cell.locked)?.key ?? letters(first)[0].key);
   }, [board.round]);
+  useEffect(() => {
+    const element = stage.current;
+    if (!element) return;
+    const fit = () => {
+      const { width, height } = element.getBoundingClientRect();
+      if (!width || !height) return;
+      const size = Math.min(
+        (width - board.columns - 1) / board.columns,
+        (height - board.rows - 1) / board.rows,
+      );
+      setCellSize(Math.max(1, Math.floor(size * 100) / 100));
+    };
+    fit();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(fit);
+    observer?.observe(element);
+    window.addEventListener('resize', fit);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', fit);
+    };
+  }, [board.rows, board.columns]);
   function input(cell: ScanwordCellDto, value: string) {
     if (blocked || cell.locked) return;
     const letter = value.normalize('NFKC').toUpperCase().slice(-1);
-    if (letter && !/^[A-ZА-ЯЁ]$/u.test(letter)) return;
+    if (letter && !(english ? /^[A-Z]$/u : /^[A-ZА-ЯЁ]$/u).test(letter)) return;
     const next = { ...drafts };
     if (letter) next[cell.key] = letter;
     else delete next[cell.key];
@@ -124,9 +148,23 @@ export function ScanwordBoard({
   }
   const selectedLetters = letters(word);
   return (
-    <div className="scanword-layout">
-      <div className="scanword-scroll" role="region" aria-label={text.title} tabIndex={-1}>
-        <div className="scanword-grid" style={{ '--columns': board.columns } as CSSProperties}>
+    <div
+      className="scanword-layout"
+      style={{ '--board-ratio': `${board.columns} / ${board.rows}` } as CSSProperties}
+    >
+      <div
+        ref={stage}
+        className="scanword-stage"
+        role="region"
+        aria-label={text.title}
+        tabIndex={-1}
+      >
+        <div
+          className="scanword-grid"
+          style={
+            { '--columns': board.columns, '--scanword-cell': `${cellSize}px` } as CSSProperties
+          }
+        >
           {board.cells.map((cell) => {
             if (cell.kind === 'block')
               return <div className="scanword-block" key={cell.key} aria-hidden="true" />;
@@ -141,7 +179,7 @@ export function ScanwordBoard({
                   title={clue.clue}
                   onClick={() => choose(clue)}
                 >
-                  <span>{clue.clue}</span>
+                  <span>{board.words.indexOf(clue) + 1}</span>
                   {clue.direction === 'across' ? <ArrowRight size={16} /> : <ArrowDown size={16} />}
                 </button>
               );
@@ -172,6 +210,7 @@ export function ScanwordBoard({
                 autoCorrect="off"
                 autoCapitalize="characters"
                 spellCheck={false}
+                lang={english ? 'en' : undefined}
                 readOnly={cell.locked || blocked}
                 onFocus={() => {
                   setActiveCell(cell.key);
@@ -190,7 +229,7 @@ export function ScanwordBoard({
                     .normalize('NFKC')
                     .trim()
                     .toUpperCase();
-                  if (!/^[A-ZА-ЯЁ]+$/u.test(pasted)) return;
+                  if (!(english ? /^[A-Z]+$/u : /^[A-ZА-ЯЁ]+$/u).test(pasted)) return;
                   const cells = letters(word),
                     start = cells.findIndex((item) => item.key === cell.key);
                   const next = { ...drafts };
@@ -205,37 +244,60 @@ export function ScanwordBoard({
           })}
         </div>
       </div>
-      <aside className="scanword-selected" aria-label={text.selection}>
-        <span className="eyebrow">{text.selection}</span>
-        <div className="scanword-clue-title">
-          <h2>{word.clue}</h2>
-          {word.direction === 'across' ? <ArrowRight size={24} /> : <ArrowDown size={24} />}
-        </div>
-        <p>
-          {text.letters(word.length)} · {word.direction === 'across' ? text.across : text.down}
-        </p>
-        <p className="scanword-input-hint">{text.inputHint}</p>
-        <div className="scanword-preview" aria-hidden="true">
-          {selectedLetters.map((cell) => (
-            <span className={activeCell === cell.key ? 'active' : ''} key={cell.key}>
-              {cell.locked ? cell.value : (drafts[cell.key] ?? '')}
-            </span>
+      <aside className="scanword-questions" aria-label={text.questions}>
+        <section className="scanword-selected" aria-label={text.selection}>
+          <span className="eyebrow">{text.question(board.words.indexOf(word) + 1)}</span>
+          <div className="scanword-clue-title">
+            <h2 lang={english ? 'en' : undefined}>{word.clue}</h2>
+            {word.direction === 'across' ? <ArrowRight size={24} /> : <ArrowDown size={24} />}
+          </div>
+          <div className="scanword-selected-meta">
+            <p>{text.letters(word.length)}</p>
+            <button
+              className="secondary scanword-hint"
+              disabled={
+                pending || blocked || word.solved || selectedLetters.every((cell) => cell.locked)
+              }
+              onClick={() => hint(word.id)}
+            >
+              <Lightbulb size={18} />
+              {text.hint}
+            </button>
+          </div>
+        </section>
+        <h3>{text.questions}</h3>
+        <ol className="scanword-question-list">
+          {board.words.map((item, index) => (
+            <li key={item.id}>
+              <button
+                type="button"
+                className={`scanword-question ${item.id === word.id ? 'is-selected' : ''} ${item.solved ? 'is-solved' : ''}`}
+                aria-pressed={item.id === word.id}
+                onClick={() => {
+                  choose(item);
+                  if (window.innerWidth <= 850)
+                    stage.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+                }}
+              >
+                <span className="scanword-question-number">{index + 1}</span>
+                <span className="scanword-question-copy">
+                  <span lang={english ? 'en' : undefined}>{item.clue}</span>
+                  <small>
+                    {text.letters(item.length)} ·{' '}
+                    {item.direction === 'across' ? text.across : text.down}
+                  </small>
+                </span>
+                {item.solved ? (
+                  <Check size={17} />
+                ) : item.direction === 'across' ? (
+                  <ArrowRight size={17} />
+                ) : (
+                  <ArrowDown size={17} />
+                )}
+              </button>
+            </li>
           ))}
-        </div>
-        <button
-          className="secondary scanword-hint"
-          disabled={
-            pending || blocked || word.solved || selectedLetters.every((cell) => cell.locked)
-          }
-          onClick={() => hint(word.id)}
-        >
-          <Lightbulb size={18} />
-          {text.hint}
-        </button>
-        <p className="scanword-hint-notice">
-          {text.hintNotice} {board.hints > 0 && `${text.hints}: ${board.hints}`}
-        </p>
-        <p className="scanword-keyboard">{text.keyboard}</p>
+        </ol>
       </aside>
     </div>
   );
