@@ -40,6 +40,8 @@ test('starter catalog and private copies with PostgreSQL', { skip: !databaseUrl 
   assert.ok(databaseUrl);
   assert.equal(new URL(databaseUrl).pathname, '/memly_test');
   const db = createDatabase(databaseUrl);
+  // Suites share memly_test and run sequentially; reset auth counters between suites.
+  await db.rateLimit.deleteMany();
   const { app } = createApp(
     db,
     loadConfig({

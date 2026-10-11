@@ -16,6 +16,8 @@ import {
   activityQuerySchema,
   starterKeySchema,
   addStarterSchema,
+  scanwordLevelIdSchema,
+  startScanwordLevelSchema,
   type UserDto,
 } from '@memly/contracts';
 import type { PrismaClient } from '@memly/database';
@@ -128,6 +130,28 @@ export function createRoutes(db: PrismaClient): Router {
     res
       .status(201)
       .json(await sessions.start(res.locals.user.id, startStudySchema.parse(req.body)));
+  });
+  router.get('/games/scanword/levels', async (_req, res) => {
+    res.json(await sessions.levels(res.locals.user.id));
+  });
+  router.get('/games/scanword/levels/:levelId/active', async (req, res) => {
+    res.json(
+      await sessions.activeLevel(
+        res.locals.user.id,
+        scanwordLevelIdSchema.parse(req.params.levelId),
+      ),
+    );
+  });
+  router.post('/games/scanword/levels/:levelId/sessions', async (req, res) => {
+    res
+      .status(201)
+      .json(
+        await sessions.startLevel(
+          res.locals.user.id,
+          scanwordLevelIdSchema.parse(req.params.levelId),
+          startScanwordLevelSchema.parse(req.body),
+        ),
+      );
   });
   router.get('/study/sessions/active', async (req, res) => {
     const input = activeStudySchema.parse(req.query);

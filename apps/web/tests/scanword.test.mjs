@@ -1,11 +1,9 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, test } from 'node:test';
 import { JSDOM } from 'jsdom';
-import {
-  applyStudyAction,
-  createStudyState,
-  studyView,
-} from '../../../packages/study-engine/src/index.ts';
+import { applyStudyAction, studyView } from '../../../packages/study-engine/src/index.ts';
+import { createScanwordLevelState } from '../../../packages/study-engine/src/scanword-levels.ts';
+import { SCANWORD_LEVELS } from '@memly/contracts';
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://memly.test/' });
 for (const key of ['window', 'document', 'HTMLElement', 'HTMLInputElement', 'Event', 'MouseEvent'])
   Object.defineProperty(globalThis, key, { value: dom.window[key], configurable: true });
@@ -15,24 +13,16 @@ const { render, screen, fireEvent, cleanup, waitFor, act } = await import('@test
 const { createElement } = await import('react');
 const { Scanword } = await import('../src/pages/Scanword.tsx');
 const { Games } = await import('../src/pages/Games.tsx');
+const { ScanwordLevels } = await import('../src/pages/ScanwordLevels.tsx');
 const { Progress } = await import('../src/pages/Progress.tsx');
 const { parseRoute } = await import('../src/app/navigation.ts');
-const deck = {
-  id: 'deck',
-  title: 'Фрукты',
-  icon: 'book',
-  cards: [
-    { id: 'apple', term: 'Apple', definition: 'Яблоко', revision: 1 },
-    { id: 'pear', term: 'Pear', definition: 'Груша', revision: 1 },
-    { id: 'phrase', term: 'take your time', definition: 'Не торопись', revision: 1 },
-  ],
-};
 let current, originalFetch, starts, events, loseResponse, loseStart, holdDraft, releaseDraft, saved;
 function dto() {
   return {
     id: 'lesson',
-    deckId: deck.id,
-    deckTitle: deck.title,
+    deckId: null,
+    levelId: 'warmup',
+    deckTitle: 'Уровень 1: Разминка',
     deckRevision: 1,
     mode: 'scanword',
     options: current.state.options,
@@ -55,25 +45,32 @@ beforeEach(() => {
   holdDraft = false;
   releaseDraft = null;
   saved = 0;
-  window.location.hash = '#/study/deck/scanword';
+  window.location.hash = '#/games/scanword/warmup';
   originalFetch = globalThis.fetch;
   globalThis.fetch = async (url, options = {}) => {
     const path = String(url);
-    if (path.includes('/sessions/active?'))
+    if (path.endsWith('/levels/warmup/active'))
       return Response.json(current?.state.status === 'active' ? dto() : null);
-    if (path === '/api/v1/study/sessions') {
+    if (path === '/api/v1/games/scanword/levels')
+      return Response.json({
+        levels: SCANWORD_LEVELS.map((level, index) => ({
+          ...level,
+          completed: index === 0 && current?.state.status === 'completed',
+          unlocked: index === 0 || (index === 1 && current?.state.status === 'completed'),
+          completedAt: null,
+          activeSessionId: index === 0 && current?.state.status === 'active' ? 'lesson' : null,
+        })),
+        completed: current?.state.status === 'completed' ? 1 : 0,
+        total: 5,
+      });
+    if (path === '/api/v1/games/scanword/levels/warmup/sessions') {
       const input = JSON.parse(options.body);
       starts.push(input);
       if (input.requestId !== current?.requestId)
         current = {
           requestId: input.requestId,
           revision: 1,
-          state: createStudyState(
-            deck.cards.filter((card) => input.cardIds.includes(card.id)),
-            'scanword',
-            input.options,
-            () => 0.37,
-          ),
+          state: createScanwordLevelState('warmup'),
           events: new Map(),
         };
       if (loseStart) {
@@ -115,7 +112,7 @@ afterEach(() => {
 function renderGame(extra = {}) {
   return render(
     createElement(Scanword, {
-      deck,
+      levelId: 'warmup',
       back: () => {},
       saved: async () => {
         saved++;
@@ -126,60 +123,95 @@ function renderGame(extra = {}) {
 }
 async function open() {
   renderGame();
-  await screen.findByRole('heading', { name: 'Настройте сканворд' });
+  await screen.findByRole('heading', { name: 'Уровень 1: Разминка' });
 }
 async function start() {
   await open();
-  fireEvent.click(screen.getByRole('button', { name: 'Начать игру' }));
   await screen.findByRole('region', { name: 'Сканворд' });
 }
-const apple = () => screen.getAllByRole('textbox', { name: /Яблоко: буква/ });
+const apple = () =>
+  screen.getAllByRole('textbox', { name: /Домашний питомец, который мяукает: буква/ });
 async function clickReady(name) {
   const button = screen.getByRole('button', { name, exact: true });
   await waitFor(() => assert.equal(button.disabled, false));
-  fireEvent.click(button);
+  await act(async () => fireEvent.click(button));
 }
-test('games entry selects a deck; setup previews excluded cards and sends only eligible cards', async () => {
-  let selected;
+test('games open curated levels, with four locked cards and no deck selector', async () => {
+  let opened = false;
   render(
     createElement(Games, {
-      decks: [deck],
-      play: (id) => {
-        selected = id;
+      openLevels: () => {
+        opened = true;
       },
-      library: () => {},
     }),
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Выбрать набор' }));
-  fireEvent.click(screen.getByRole('button', { name: /Фрукты/ }));
-  assert.equal(selected, 'deck');
+  fireEvent.click(screen.getByRole('button', { name: 'Открыть уровни' }));
+  assert.equal(opened, true);
+  assert.equal(screen.queryByRole('button', { name: 'Выбрать набор' }), null);
+  cleanup();
+  render(createElement(ScanwordLevels, { live: true, back: () => {}, play: () => {} }));
+  await screen.findByText('Пройдено 0 из 5 уровней');
+  assert.equal(screen.getAllByRole('article').length, 5);
+  assert.equal(
+    screen.getAllByRole('button', { name: /Пройдите уровень/ }).filter((button) => button.disabled)
+      .length,
+    4,
+  );
+  assert.equal(screen.getByRole('button', { name: 'Начать уровень' }).disabled, false);
   cleanup();
   await start();
-  assert.deepEqual(starts[0].cardIds, ['apple', 'pear']);
-  assert.equal(starts[0].options.direction, 'reverse');
-  assert.equal(starts[0].options.count, 2);
-  assert.equal(current.state.status, 'active');
-  assert.deepEqual(parseRoute('#/games'), { page: 'games' });
-  assert.equal(parseRoute('#/study/deck/scanword?session=lesson').mode, 'scanword');
+  assert.deepEqual(Object.keys(starts[0]), ['requestId']);
+  assert.equal(current.state.scanword.boards.length, 1);
+  assert.deepEqual(parseRoute('#/games/scanword'), { page: 'scanword-levels' });
+  assert.deepEqual(parseRoute('#/games/scanword/nature?session=lesson'), {
+    page: 'scanword-level',
+    id: 'nature',
+    session: 'lesson',
+  });
+  assert.deepEqual(parseRoute('#/games/scanword/missing'), { page: 'scanword-levels' });
+});
+test('signed-in level deep links open the board without requesting a deck', async () => {
+  const gameFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url, options) => {
+    const path = String(url);
+    requests.push(path);
+    if (path === '/api/v1/me')
+      return Response.json({ id: 'player', name: 'Игрок', email: 'player@memly.test' });
+    if (path === '/api/v1/folders') return Response.json([]);
+    if (path === '/api/v1/study/progress')
+      return Response.json({ reviewed: 0, known: 0, decks: 0 });
+    if (path.startsWith('/api/v1/decks?'))
+      return Response.json({ items: [], page: 1, pages: 1, total: 0 });
+    return gameFetch(url, options);
+  };
+  const { App } = await import('../src/app/App.tsx');
+  render(createElement(App));
+  await screen.findByRole('region', { name: 'Сканворд' });
+  assert.equal(
+    requests.some((path) => path.startsWith('/api/v1/decks/')),
+    false,
+  );
+  assert.equal(starts.length, 1);
 });
 test('typing advances focus; paste fills a word; server checks and hints produce an honest saved result', async () => {
   await start();
   let inputs = apple();
   fireEvent.focus(inputs[0]);
-  fireEvent.change(inputs[0], { target: { value: 'a' } });
+  fireEvent.change(inputs[0], { target: { value: 'к' } });
   assert.equal(document.activeElement, apple()[1]);
   fireEvent.keyDown(apple()[1], { key: 'Backspace' });
   assert.equal(document.activeElement, apple()[0]);
-  fireEvent.paste(apple()[0], { clipboardData: { getData: () => 'apple' } });
+  fireEvent.paste(apple()[0], { clipboardData: { getData: () => 'кот' } });
   assert.equal(
     apple()
       .map((input) => input.value)
       .join(''),
-    'APPLE',
+    'КОТ',
   );
   await clickReady('Проверить');
   await waitFor(() => assert.equal(studyView(current.state).summary.answered, 1));
-  const pearInputs = screen.getAllByRole('textbox', { name: /Груша: буква/ });
+  const pearInputs = screen.getAllByRole('textbox', { name: /Здание, в котором живут: буква/ });
   fireEvent.focus(pearInputs[0]);
   await clickReady('Открыть букву');
   await waitFor(() => assert.equal(studyView(current.state).summary.hints, 1));
@@ -204,16 +236,23 @@ test('typing advances focus; paste fills a word; server checks and hints produce
     fireEvent.change(input, { target: { value: expected.get(cell.key) } });
   }
   await clickReady('Проверить');
-  await screen.findByRole('heading', { name: 'Занятие завершено' });
+  await screen.findByRole('heading', { name: 'Уровень пройден!' });
   assert.equal(saved, 1);
   assert.equal(studyView(current.state).summary.hints, 1);
   assert.ok(studyView(current.state).summary.score < 100);
-  assert.ok(screen.getByText('С первого раза без подсказок'));
+  assert.ok(screen.getByText(/^С первого раза без подсказок/));
+  assert.ok(screen.getByRole('button', { name: 'Следующий уровень' }));
+  cleanup();
+  render(createElement(ScanwordLevels, { live: true, back: () => {}, play: () => {} }));
+  await screen.findByText('Пройдено 1 из 5 уровней');
+  assert.ok(screen.getByText('Пройден'));
+  assert.equal(screen.getAllByRole('button', { name: /Пройдите уровень/ }).length, 3);
+  assert.ok(screen.getByRole('button', { name: 'Играть ещё раз' }));
 });
 test('lost draft response retries the same event, and reopening restores the original grid and letters', async () => {
   await start();
   loseResponse = true;
-  fireEvent.change(apple()[0], { target: { value: 'a' } });
+  fireEvent.change(apple()[0], { target: { value: 'к' } });
   await screen.findByRole('alert');
   const first = events.at(-1);
   await clickReady('Повторить действие');
@@ -222,32 +261,30 @@ test('lost draft response retries the same event, and reopening restores the ori
   const board = dto().scanword;
   cleanup();
   renderGame();
-  await screen.findByRole('heading', { name: 'Есть незаконченный сканворд' });
-  fireEvent.click(screen.getByRole('button', { name: 'Продолжить игру' }));
   await screen.findByRole('region', { name: 'Сканворд' });
-  assert.equal(apple()[0].value, 'A');
+  assert.equal(apple()[0].value, 'К');
   assert.deepEqual(dto().scanword, board);
   assert.equal(saved, 0);
 });
 test('edits made while autosave is in flight are preserved and saved in a second revision', async () => {
   await start();
   holdDraft = true;
-  fireEvent.change(apple()[0], { target: { value: 'A' } });
+  fireEvent.change(apple()[0], { target: { value: 'К' } });
   await waitFor(() => assert.ok(releaseDraft));
-  fireEvent.change(apple()[1], { target: { value: 'P' } });
+  fireEvent.change(apple()[1], { target: { value: 'О' } });
   await act(async () => releaseDraft());
   await waitFor(
     () =>
       assert.equal(studyView(current.state).scanword.cells.filter((cell) => cell.value).length, 2),
     { timeout: 2500 },
   );
-  assert.equal(apple()[0].value, 'A');
-  assert.equal(apple()[1].value, 'P');
+  assert.equal(apple()[0].value, 'К');
+  assert.equal(apple()[1].value, 'О');
   await screen.findByText('Сохранено');
 });
 test('sidebar navigation flushes the latest letters before changing route', async () => {
   await start();
-  fireEvent.change(apple()[0], { target: { value: 'A' } });
+  fireEvent.change(apple()[0], { target: { value: 'К' } });
   let allowed;
   await act(async () => {
     allowed = window.dispatchEvent(
@@ -259,9 +296,8 @@ test('sidebar navigation flushes the latest letters before changing route', asyn
   assert.equal(studyView(current.state).scanword.cells.filter((cell) => cell.value).length, 1);
 });
 test('a lost start response can be retried without generating a second session', async () => {
-  await open();
   loseStart = true;
-  fireEvent.click(screen.getByRole('button', { name: 'Начать игру' }));
+  await open();
   await screen.findByRole('alert');
   const first = starts[0].requestId;
   await clickReady('Повторить действие');
@@ -283,8 +319,9 @@ test('scanword filter and history result are available in the progress page', as
       history: [
         {
           id: 'lesson',
-          deckId: 'deck',
-          deckTitle: 'Фрукты',
+          deckId: null,
+          levelId: 'warmup',
+          deckTitle: 'Уровень 1: Разминка',
           mode: 'scanword',
           status: 'completed',
           completedAt: '2026-10-10T10:00:00Z',
@@ -302,23 +339,21 @@ test('scanword filter and history result are available in the progress page', as
       },
     }),
   );
-  await screen.findByRole('button', { name: 'Результат: Фрукты' });
+  await screen.findByRole('button', { name: 'Результат: Уровень 1: Разминка' });
   fireEvent.change(screen.getByRole('combobox', { name: 'Режим обучения' }), {
     target: { value: 'scanword' },
   });
-  await screen.findByRole('button', { name: 'Результат: Фрукты' });
-  fireEvent.click(screen.getByRole('button', { name: 'Результат: Фрукты' }));
+  await screen.findByRole('button', { name: 'Результат: Уровень 1: Разминка' });
+  fireEvent.click(screen.getByRole('button', { name: 'Результат: Уровень 1: Разминка' }));
   assert.equal(opened.mode, 'scanword');
 });
 
 test('leaving through browser history saves letters before the debounce', async () => {
   const view = renderGame();
-  await screen.findByRole('heading', { name: 'Настройте сканворд' });
-  fireEvent.click(screen.getByRole('button', { name: 'Начать игру' }));
   await screen.findByRole('region', { name: 'Сканворд' });
-  fireEvent.change(apple()[0], { target: { value: 'A' } });
+  fireEvent.change(apple()[0], { target: { value: 'К' } });
   view.unmount();
   await waitFor(() => assert.equal(events.length, 1));
   assert.equal(events[0].action.type, 'scanword-draft');
-  assert.equal(events[0].action.cells[0].value, 'A');
+  assert.equal(events[0].action.cells[0].value, 'К');
 });

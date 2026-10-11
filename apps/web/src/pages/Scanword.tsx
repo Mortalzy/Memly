@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { ArrowLeft, ArrowRight, BookOpen, Check, Clock3 } from 'lucide-react';
-import { scanwordCandidates, type StartStudyInput, type StudyOptions } from '@memly/contracts';
+import { ArrowLeft, ArrowRight, BookOpen, Check, Clock3, Puzzle } from 'lucide-react';
+import { SCANWORD_LEVELS, type ScanwordLevelId } from '@memly/contracts';
 import type { Deck } from '../entities/deck';
 import { PageHeading, ProgressBar } from '../shared/ui';
 import { scanwordText as text } from '../shared/scanword-text';
@@ -11,44 +11,31 @@ import { useScanwordSession } from '../features/use-scanword-session';
 
 export function Scanword({
   deck,
+  levelId,
+  nextLevel,
   back,
   saved,
   sessionId,
 }: {
-  deck: Deck;
+  deck?: Deck;
+  levelId?: ScanwordLevelId;
+  nextLevel?: (id: ScanwordLevelId) => void;
   back: () => void;
   saved?: () => Promise<void>;
   sessionId?: string;
 }) {
-  const game = useScanwordSession(deck, saved, sessionId);
-  const [direction, setDirection] = useState<StudyOptions['direction']>(() =>
-    scanwordCandidates(deck.cards, 'reverse').eligible.length ? 'reverse' : 'forward',
-  );
+  const level = SCANWORD_LEVELS.find((item) => item.id === levelId);
+  const game = useScanwordSession(level ?? deck!, saved, sessionId);
   const [checked, setChecked] = useState(false);
-  const choices = scanwordCandidates(deck.cards, direction);
   const session = game.session;
   const board = session?.scanword;
   const roundDone = board?.words.every((word) => word.solved);
-  const start = (cardIds?: string[]) => {
-    const options: StudyOptions = {
-      direction: session?.options.direction ?? direction,
-      answerType: 'written',
-      count: 500,
-      shuffle: true,
-      filter: 'all',
-    };
-    const eligible = scanwordCandidates(deck.cards, options.direction).eligible.filter(
-      (item) => !cardIds || cardIds.includes(item.cardId),
-    );
-    const input: StartStudyInput = {
-      requestId: crypto.randomUUID(),
-      deckId: deck.id,
-      mode: 'scanword',
-      options: { ...options, count: eligible.length },
-      cardIds: eligible.map((item) => item.cardId),
-    };
-    setChecked(false);
-    void game.start(input);
+  const next = level ? SCANWORD_LEVELS.find((item) => item.number === level.number + 1) : undefined;
+  const start = () => {
+    if (level) {
+      setChecked(false);
+      void game.start({ requestId: crypto.randomUUID() });
+    }
   };
   const leave = async () => {
     if (!session || session.status !== 'active' || (await game.flush())) back();
@@ -68,21 +55,25 @@ export function Scanword({
     <div className="scanword-page">
       <button className="back-link" disabled={game.pending} onClick={() => void leave()}>
         <ArrowLeft size={17} />
-        {text.allGames}
+        {text.allLevels}
       </button>
-      <PageHeading title={text.title} subtitle={text.subtitle} />
+      <PageHeading
+        title={level ? `${text.level(level.number)}: ${level.title}` : text.title}
+        subtitle={text.subtitle}
+      />
       {!saved && <p className="study-notice">{text.demo}</p>}
       <section className="panel scanword-deck-bar">
         <span className="scanword-deck-icon">
-          <BookOpen size={23} />
+          {level ? <Puzzle size={23} /> : <BookOpen size={23} />}
         </span>
         <div>
-          <strong>{session?.deckTitle ?? deck.title}</strong>
+          <strong>{session?.deckTitle ?? level?.title ?? deck?.title}</strong>
           <p>
-            {deck.cards.length} карточек ·{' '}
             {session
               ? text.solved(session.summary.answered, session.summary.total)
-              : text.ready(choices.eligible.length, deck.cards.length)}
+              : level
+                ? `${text.wordCount(level.wordCount)} · ${text.difficulty[level.difficulty]}`
+                : text.legacyHint}
           </p>
         </div>
       </section>
@@ -130,58 +121,17 @@ export function Scanword({
                 <button className="primary" disabled={game.pending} onClick={game.continueGame}>
                   {text.continue}
                 </button>
-                <button className="secondary" disabled={game.pending} onClick={game.reset}>
-                  {text.new}
-                </button>
               </div>
             </section>
           ) : (
             <section className="panel scanword-setup">
-              <h2>{text.setup}</h2>
-              <p>{text.rules}</p>
-              <label>
-                {text.direction}
-                <select
-                  value={direction}
-                  disabled={game.pending || game.hasStartRetry}
-                  onChange={(event) =>
-                    setDirection(event.target.value as StudyOptions['direction'])
-                  }
-                >
-                  <option value="reverse">{text.terms}</option>
-                  <option value="forward">{text.definitions}</option>
-                </select>
-              </label>
-              <div className="scanword-ready">
-                <Check size={20} />
-                <strong>{text.ready(choices.eligible.length, deck.cards.length)}</strong>
-              </div>
-              {choices.excluded.length > 0 && (
-                <>
-                  <p className="study-notice">{text.subset}</p>
-                  <details className="scanword-excluded">
-                    <summary>
-                      {text.excluded} ({choices.excluded.length})
-                    </summary>
-                    <ul>
-                      {choices.excluded.map((item) => (
-                        <li key={item.cardId}>
-                          <strong>{item.answer}</strong>
-                          <span>{item.reason === 'duplicate' ? text.duplicate : text.format}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                </>
+              <p>{level ? text.unlockHint : text.legacyHint}</p>
+              {!level && (
+                <button className="primary" onClick={back}>
+                  {text.allLevels}
+                  <ArrowRight size={18} />
+                </button>
               )}
-              <button
-                className="primary"
-                disabled={game.pending || !choices.eligible.length || game.hasStartRetry}
-                onClick={() => start()}
-              >
-                {game.pending ? text.loading : text.start}
-                <ArrowRight size={18} />
-              </button>
             </section>
           )}
         </>
@@ -193,18 +143,73 @@ export function Scanword({
             </p>
           )}
           {session.status !== 'active' ? (
-            <StudyResults
-              session={session}
-              pending={game.pending}
-              onStart={start}
-              onSetup={game.reset}
-            />
+            level ? (
+              <section className="panel result-panel scanword-level-result">
+                <span className="result-icon">
+                  <Check size={40} />
+                </span>
+                <h2>
+                  {session.status === 'completed'
+                    ? next
+                      ? text.levelDone
+                      : text.finalDone
+                    : studyText.abandoned}
+                </h2>
+                <p>
+                  {session.status === 'completed'
+                    ? next
+                      ? text.levelDoneHint
+                      : text.finalHint
+                    : text.unlockHint}
+                </p>
+                <div className="result-score">
+                  {session.summary.score}
+                  <span>%</span>
+                </div>
+                <p>
+                  {text.independent}
+                  <br />
+                  {text.solved(session.summary.answered, session.summary.total)}
+                  <br />
+                  {studyText.mistakes}: {session.summary.mistakes} · {text.hints}:{' '}
+                  {session.summary.hints ?? 0}
+                  <br />
+                  {studyText.elapsed}: {studyDuration(session.elapsedMs)}
+                </p>
+                <div className="study-actions">
+                  {session.status === 'completed' && next && (
+                    <button
+                      className="primary"
+                      disabled={game.pending}
+                      onClick={() => nextLevel?.(next.id)}
+                    >
+                      {text.nextLevel}
+                      <ArrowRight size={18} />
+                    </button>
+                  )}
+                  <button className="secondary" disabled={game.pending} onClick={start}>
+                    {text.replayLevel}
+                  </button>
+                  <button className="secondary" disabled={game.pending} onClick={back}>
+                    {text.allLevels}
+                  </button>
+                </div>
+              </section>
+            ) : (
+              <StudyResults
+                session={session}
+                pending={game.pending}
+                onStart={start}
+                onSetup={back}
+                readOnly
+              />
+            )
           ) : (
             board && (
               <>
                 <section className="panel scanword-board-panel">
                   <div className="scanword-round-header">
-                    <h2>{text.round(board.round, board.rounds)}</h2>
+                    <h2>{level ? text.title : text.round(board.round, board.rounds)}</h2>
                     <span>
                       <Clock3 size={18} />
                       {studyDuration(game.elapsedMs)}

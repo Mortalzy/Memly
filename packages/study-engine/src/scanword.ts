@@ -23,6 +23,64 @@ interface Board {
   columns: number;
   words: Word[];
 }
+export interface ScanwordLayout {
+  rows: number;
+  columns: number;
+  words: { row: number; column: number; direction: 'across' | 'down' }[];
+}
+export function createFixedScanword(cards: CardDto[], layout: ScanwordLayout): ScanwordState {
+  const candidates = scanwordCandidates(cards, 'reverse');
+  requireRule(
+    !candidates.excluded.length && cards.length === layout.words.length,
+    'Неверные слова уровня',
+  );
+  requireRule(
+    Number.isInteger(layout.rows) &&
+      Number.isInteger(layout.columns) &&
+      layout.rows > 0 &&
+      layout.columns > 0 &&
+      layout.rows <= 22 &&
+      layout.columns <= 22,
+    'Неверный размер сетки',
+  );
+  const words: Word[] = [];
+  candidates.eligible.forEach((item, cardIndex) => {
+    const word: Word = {
+      ...layout.words[cardIndex],
+      id: `w-${cardIndex}`,
+      cardIndex,
+      clue: item.clue,
+      answer: item.answer,
+    };
+    requireRule(
+      Number.isInteger(word.row) &&
+        Number.isInteger(word.column) &&
+        ['across', 'down'].includes(word.direction),
+      'Неверные координаты слова',
+    );
+    requireRule(
+      [cluePosition(word), ...positions(word)].every(
+        (p) => p.row >= 0 && p.row < layout.rows && p.column >= 0 && p.column < layout.columns,
+      ),
+      'Слово вне сетки',
+    );
+    requireRule(placementScore(words, occupied(words), word) !== null, 'Неверное пересечение');
+    words.push(word);
+  });
+  return {
+    boards: [{ rows: layout.rows, columns: layout.columns, words }],
+    round: 0,
+    drafts: {},
+    locked: {},
+    solved: [],
+    mistakes: {},
+    checks: {},
+    hints: {},
+    hintCount: 0,
+    answers: {},
+    wrongWords: [],
+  };
+}
 export interface ScanwordState {
   boards: Board[];
   round: number;

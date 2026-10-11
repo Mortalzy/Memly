@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import type {
-  StartStudyInput,
   StudyAction,
   StudyEventInput,
   StudySessionDto,
+  ScanwordLevelInfo,
+  StartScanwordLevelInput,
 } from '@memly/contracts';
-import type { StudyState } from '@memly/study-engine';
 import type { Deck } from '../entities/deck';
 import { errorMessage } from '../shared/api';
 import { studyClient } from './study-client';
+import { scanwordDemo } from './scanword-demo';
 
 const values = (session: StudySessionDto): Record<string, string> =>
   Object.fromEntries(
@@ -21,12 +22,19 @@ export function sameLetters(a: Record<string, string>, b: Record<string, string>
   const right = Object.keys(b).filter((key) => b[key]);
   return left.length === right.length && left.every((key) => a[key] === b[key]);
 }
-export function useScanwordSession(deck: Deck, saved?: () => Promise<void>, sessionId?: string) {
+export function useScanwordSession(
+  source: Deck | ScanwordLevelInfo,
+  saved?: () => Promise<void>,
+  sessionId?: string,
+) {
+  const level = 'number' in source ? source : null;
+  const deck = 'cards' in source ? source : null;
+  const starting = useRef(false);
   const live = Boolean(saved);
   const [session, setSession] = useState<StudySessionDto | null>(null);
   const [resume, setResume] = useState<StudySessionDto | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(live);
+  const [loading, setLoading] = useState(live || Boolean(level));
   const [pending, setPending] = useState(false);
   const [blocking, setBlocking] = useState(false);
   const [error, setError] = useState('');
@@ -35,9 +43,8 @@ export function useScanwordSession(deck: Deck, saved?: () => Promise<void>, sess
   const draftRef = useRef(drafts);
   const receivedAt = useRef(Date.now());
   const retry = useRef<StudyEventInput | null>(null);
-  const retryStart = useRef<StartStudyInput | null>(null);
+  const retryStart = useRef<StartScanwordLevelInput | null>(null);
   const flight = useRef<Promise<StudySessionDto | null> | null>(null);
-  const demo = useRef<StudyState | null>(null);
   const mounted = useRef(true);
   const savedRef = useRef(saved);
   savedRef.current = saved;
@@ -58,21 +65,34 @@ export function useScanwordSession(deck: Deck, saved?: () => Promise<void>, sess
     return () => {
       mounted.current = false;
       // A browser history change can unmount the board before its debounce runs.
-      if (live) void flush();
+      if (live || level) void flush();
     };
   }, []);
   async function load(signal?: AbortSignal) {
-    if (!live) return;
+    if (!live && !level) return;
     setLoading(true);
     setError('');
     try {
       if (sessionId) {
-        const value = await studyClient.get(sessionId, signal);
-        if (value.deckId !== deck.id || value.mode !== 'scanword' || !value.scanword)
+        const value = live
+          ? await studyClient.get(sessionId, signal)
+          : await scanwordDemo.get(sessionId);
+        if (
+          (level ? value.levelId !== level.id : value.deckId !== deck!.id) ||
+          value.mode !== 'scanword' ||
+          !value.scanword
+        )
           throw new Error('Игра относится к другому набору или режиму');
-        accept(value);
+        if (!signal?.aborted) accept(value);
+      } else if (level) {
+        const active = live
+          ? await studyClient.activeLevel(level.id, signal)
+          : await scanwordDemo.active(level.id);
+        if (signal?.aborted) return;
+        if (active) accept(active);
+        else await start({ requestId: crypto.randomUUID() });
       } else {
-        const active = await studyClient.active(deck.id, 'scanword', signal);
+        const active = await studyClient.active(deck!.id, 'scanword', signal);
         if (!signal?.aborted) setResume(active);
       }
     } catch (failure) {
@@ -85,7 +105,7 @@ export function useScanwordSession(deck: Deck, saved?: () => Promise<void>, sess
     const abort = new AbortController();
     void load(abort.signal);
     return () => abort.abort();
-  }, [deck.id, live, sessionId]);
+  }, [source.id, live, sessionId]);
   useEffect(() => {
     if (session?.status !== 'active') return;
     const timer = window.setInterval(() => setClock(Date.now()), 1000);
@@ -109,18 +129,7 @@ export function useScanwordSession(deck: Deck, saved?: () => Promise<void>, sess
       try {
         let result: StudySessionDto;
         if (live) result = await studyClient.event(lesson.id, input);
-        else {
-          const engine = await import('@memly/study-engine');
-          demo.current = engine.applyStudyAction(demo.current!, input.action).state;
-          result = {
-            ...lesson,
-            revision: lesson.revision + 1,
-            status: demo.current.status,
-            ...engine.studyView(demo.current),
-            elapsedMs: Date.now() - new Date(lesson.startedAt).getTime(),
-            completedAt: demo.current.status === 'completed' ? new Date().toISOString() : null,
-          };
-        }
+        else result = await scanwordDemo.event(lesson.id, input);
         retry.current = null;
         accept(result, input.action.type !== 'scanword-draft');
         if (result.status === 'completed')
@@ -142,48 +151,26 @@ export function useScanwordSession(deck: Deck, saved?: () => Promise<void>, sess
     flight.current = task;
     return task;
   }
-  async function start(input: StartStudyInput) {
-    if (pending || flight.current) return;
+  async function start(input: StartScanwordLevelInput) {
+    if (!level || pending || flight.current || starting.current) return;
+    starting.current = true;
     setPending(true);
     setError('');
     retryStart.current ??= input;
     try {
       let value: StudySessionDto;
-      if (live) value = await studyClient.start(retryStart.current);
-      else {
-        const engine = await import('@memly/study-engine');
-        const selected = deck.cards.filter((card) => input.cardIds?.includes(card.id));
-        demo.current = engine.createStudyState(
-          selected.map((card) => ({ ...card, revision: card.revision ?? 1 })),
-          'scanword',
-          input.options,
-          Math.random,
-        );
-        value = {
-          id: crypto.randomUUID(),
-          deckId: deck.id,
-          deckTitle: deck.title,
-          deckRevision: deck.revision ?? 1,
-          mode: 'scanword',
-          options: input.options,
-          revision: 1,
-          status: 'active',
-          startedAt: new Date().toISOString(),
-          completedAt: null,
-          elapsedMs: 0,
-          ...engine.studyView(demo.current),
-          bestMs: null,
-          outdated: false,
-        };
-      }
+      value = live
+        ? await studyClient.startLevel(level.id, retryStart.current)
+        : await scanwordDemo.start(level.id, retryStart.current.requestId);
       retryStart.current = null;
       retry.current = null;
-      setResume(null);
+      if (mounted.current) setResume(null);
       accept(value);
     } catch (failure) {
-      setError(errorMessage(failure));
+      if (mounted.current) setError(errorMessage(failure));
     } finally {
-      setPending(false);
+      starting.current = false;
+      if (mounted.current) setPending(false);
     }
   }
   async function flush(): Promise<StudySessionDto | null> {
@@ -208,10 +195,12 @@ export function useScanwordSession(deck: Deck, saved?: () => Promise<void>, sess
     if (lesson) await send({ type: 'scanword-hint', round: lesson.scanword!.round, wordId });
   }
   async function reload() {
-    if (flight.current || !current.current || !live) return;
+    if (flight.current || !current.current || (!live && !level)) return;
     setPending(true);
     try {
-      const value = await studyClient.get(current.current.id);
+      const value = live
+        ? await studyClient.get(current.current.id)
+        : await scanwordDemo.get(current.current.id);
       retry.current = null;
       accept(value);
       setError('');

@@ -12,6 +12,8 @@ test('API integration with PostgreSQL', { skip: !databaseUrl }, async (t) => {
   assert.ok(databaseUrl);
   assert.equal(new URL(databaseUrl).pathname, '/memly_test', 'Use a dedicated memly_test database');
   const db = createDatabase(databaseUrl);
+  // Suites share memly_test and run sequentially; reset auth counters between suites.
+  await db.rateLimit.deleteMany();
   const config = loadConfig({
     NODE_ENV: 'test',
     DATABASE_URL: databaseUrl,

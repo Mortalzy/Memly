@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ScanwordLevelId } from './scanword-levels.ts';
 import type { ScanwordBoardDto } from './scanword.ts';
 
 export const studyModeSchema = z.enum(['cards', 'learn', 'test', 'match', 'scanword']);
@@ -80,7 +81,8 @@ export interface StudySummary {
 }
 export interface StudySessionDto {
   id: string;
-  deckId: string;
+  deckId: string | null;
+  levelId?: ScanwordLevelId | null;
   deckTitle: string;
   deckRevision: number;
   mode: StudyMode;
@@ -109,7 +111,8 @@ export interface StudySessionDto {
 }
 export interface StudyHistoryItem {
   id: string;
-  deckId: string;
+  deckId: string | null;
+  levelId?: ScanwordLevelId | null;
   deckTitle: string;
   mode: StudyMode;
   status: StudySessionDto['status'];

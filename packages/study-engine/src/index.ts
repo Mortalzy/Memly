@@ -11,11 +11,13 @@ import type {
 import { requireRule } from './rules.ts';
 import {
   applyScanword,
+  createFixedScanword,
   createScanword,
   scanwordResults,
   scanwordSummary,
   scanwordView,
   type ScanwordState,
+  type ScanwordLayout,
 } from './scanword.ts';
 export { StudyRuleError } from './rules.ts';
 
@@ -86,6 +88,7 @@ export function createStudyState(
   mode: StudyMode,
   options: StudyOptions,
   random: () => number,
+  scanwordLayout?: ScanwordLayout,
 ): StudyState {
   requireRule(cards.length > 0, 'Нет карточек для занятия');
   const selected = (options.shuffle ? shuffle(cards, random) : [...cards]).slice(0, options.count);
@@ -105,7 +108,9 @@ export function createStudyState(
       rounds: [],
       round: 0,
       status: 'active',
-      scanword: createScanword(selected, options, random),
+      scanword: scanwordLayout
+        ? createFixedScanword(selected, scanwordLayout)
+        : createScanword(selected, options, random),
     };
   const questions: Question[] = [];
   selected.forEach((card, cardIndex) => {

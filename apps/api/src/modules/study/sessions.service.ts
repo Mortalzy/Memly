@@ -8,7 +8,12 @@ import type {
   StudyOverview,
   StudySessionDto,
   StudySummary,
+  ScanwordLevelId,
+  StartScanwordLevelInput,
+  ScanwordLevelsDto,
 } from '@memly/contracts';
+import { SCANWORD_LEVELS } from '@memly/contracts';
+import { createScanwordLevelState } from '@memly/study-engine/scanword-levels';
 import {
   applyStudyAction,
   createStudyState,
@@ -22,12 +27,31 @@ import { readableDeck } from '../decks/decks.service.ts';
 
 type Database = PrismaClient | Prisma.TransactionClient;
 const access = (userId: string) => ({ OR: [{ ownerId: userId }, { visibility: 'public' }] });
+export const sessionAccess = (userId: string): Prisma.StudySessionWhereInput => ({
+  OR: [
+    { deck: access(userId) },
+    { deckId: null, levelKey: { in: SCANWORD_LEVELS.map((level) => level.id) }, mode: 'scanword' },
+  ],
+});
+async function unlocked(db: Database, userId: string, levelId: ScanwordLevelId) {
+  const before = SCANWORD_LEVELS.slice(
+    0,
+    SCANWORD_LEVELS.findIndex((level) => level.id === levelId),
+  );
+  const completed = await db.studySession.findMany({
+    where: { userId, levelKey: { in: before.map((level) => level.id) }, status: 'completed' },
+    distinct: ['levelKey'],
+    select: { levelKey: true },
+  });
+  if (completed.length !== before.length)
+    throw new AppError(403, 'LEVEL_LOCKED', 'Сначала пройдите предыдущий уровень');
+}
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 type Stored = Prisma.StudySessionGetPayload<{ include: { deck: { select: { revision: true } } } }>;
 const include = { deck: { select: { revision: true } } } as const;
 async function owned(db: Database, userId: string, id: string): Promise<Stored> {
   const session = await db.studySession.findFirst({
-    where: { id, userId, deck: access(userId) },
+    where: { id, userId, ...sessionAccess(userId) },
     include,
   });
   if (!session) throw missing();
@@ -54,6 +78,7 @@ async function dto(db: Database, session: Stored): Promise<StudySessionDto> {
   return {
     id: session.id,
     deckId: session.deckId,
+    levelId: session.levelKey as ScanwordLevelId | null,
     deckTitle: session.deckTitle,
     deckRevision: session.deckRevision,
     mode: state.mode,
@@ -68,12 +93,115 @@ async function dto(db: Database, session: Stored): Promise<StudySessionDto> {
         : session.elapsedMs,
     ...studyView(state),
     bestMs,
-    outdated: session.deck.revision !== session.deckRevision,
+    outdated: session.deck
+      ? session.deck.revision !== session.deckRevision
+      : SCANWORD_LEVELS.find((level) => level.id === session.levelKey)?.revision !==
+        session.deckRevision,
   };
 }
 export function createStudySessionService(db: PrismaClient) {
   return {
+    async levels(userId: string): Promise<ScanwordLevelsDto> {
+      const records = await db.studySession.findMany({
+        where: {
+          userId,
+          levelKey: { in: SCANWORD_LEVELS.map((level) => level.id) },
+          status: { in: ['active', 'completed'] },
+        },
+        select: { id: true, levelKey: true, status: true, completedAt: true },
+        orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      });
+      const completedKeys = new Set(
+        records.filter((row) => row.status === 'completed').map((row) => row.levelKey),
+      );
+      const levels = SCANWORD_LEVELS.map((level, index) => ({
+        ...level,
+        unlocked: SCANWORD_LEVELS.slice(0, index).every((before) => completedKeys.has(before.id)),
+        completed: completedKeys.has(level.id),
+        completedAt:
+          records
+            .find((row) => row.levelKey === level.id && row.status === 'completed')
+            ?.completedAt?.toISOString() ?? null,
+        activeSessionId:
+          records.find((row) => row.levelKey === level.id && row.status === 'active')?.id ?? null,
+      }));
+      return {
+        levels,
+        total: levels.length,
+        completed: levels.filter((level) => level.completed).length,
+      };
+    },
+    async activeLevel(userId: string, levelId: ScanwordLevelId): Promise<StudySessionDto | null> {
+      await unlocked(db, userId, levelId);
+      const session = await db.studySession.findFirst({
+        where: { userId, levelKey: levelId, status: 'active' },
+        include,
+        orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      });
+      return session ? dto(db, session) : null;
+    },
+    async startLevel(
+      userId: string,
+      levelId: ScanwordLevelId,
+      input: StartScanwordLevelInput,
+    ): Promise<StudySessionDto> {
+      return db.$transaction(
+        async (tx) => {
+          const request = { ...input, levelId };
+          const previous = await tx.studySession.findUnique({
+            where: { userId_requestId: { userId, requestId: input.requestId } },
+            include,
+          });
+          if (previous) {
+            if (!isDeepStrictEqual(previous.request, request))
+              throw new AppError(409, 'EVENT_CONFLICT', 'ID запуска уже использован');
+            return dto(tx, previous);
+          }
+          await unlocked(tx, userId, levelId);
+          const info = SCANWORD_LEVELS.find((level) => level.id === levelId)!;
+          const active = await tx.studySession.findMany({
+            where: { userId, levelKey: levelId, status: 'active' },
+          });
+          for (const old of active)
+            await tx.studySession.update({
+              where: { id: old.id },
+              data: {
+                status: 'abandoned',
+                state: json({ ...(old.state as unknown as StudyState), status: 'abandoned' }),
+                completedAt: new Date(),
+                elapsedMs: Math.min(2147483647, Math.max(0, Date.now() - old.startedAt.getTime())),
+                revision: { increment: 1 },
+              },
+            });
+          const state = createScanwordLevelState(levelId);
+          const session = await tx.studySession.create({
+            data: {
+              userId,
+              levelKey: levelId,
+              requestId: input.requestId,
+              request: json(request),
+              mode: 'scanword',
+              deckTitle: `Уровень ${info.number}: ${info.title}`,
+              deckRevision: info.revision,
+              cardCount: info.wordCount,
+              direction: 'reverse',
+              summary: json(studySummary(state)),
+              state: json(state),
+            },
+            include,
+          });
+          return dto(tx, session);
+        },
+        { isolationLevel: 'Serializable', timeout: 15000 },
+      );
+    },
     async start(userId: string, input: StartStudyInput): Promise<StudySessionDto> {
+      if (input.mode === 'scanword')
+        throw new AppError(
+          400,
+          'READY_LEVELS_ONLY',
+          'Сканворды доступны как готовые уровни в разделе «Игры»',
+        );
       return db.$transaction(
         async (tx) => {
           const deck = await readableDeck(tx, userId, input.deckId);
@@ -212,7 +340,7 @@ export function createStudySessionService(db: PrismaClient) {
           await tx.studyEvent.create({
             data: { sessionId: id, eventId: input.eventId, input: json(input) },
           });
-          if (next.assessments.length) {
+          if (next.assessments.length && session.deckId) {
             const current = await tx.card.findMany({
               where: {
                 deckId: session.deckId,
@@ -253,12 +381,13 @@ export function createStudySessionService(db: PrismaClient) {
       const sessions = await db.studySession.findMany({
         where: {
           userId,
-          deck: access(userId),
+          ...sessionAccess(userId),
           startedAt: { gte: new Date(Date.now() - days * 86400000) },
         },
         select: {
           id: true,
           deckId: true,
+          levelKey: true,
           deckTitle: true,
           mode: true,
           status: true,
@@ -280,6 +409,7 @@ export function createStudySessionService(db: PrismaClient) {
         history: sessions.slice(0, 30).map((item) => ({
           id: item.id,
           deckId: item.deckId,
+          levelId: item.levelKey as ScanwordLevelId | null,
           deckTitle: item.deckTitle,
           mode: item.mode as StudyMode,
           status: item.status as StudySessionDto['status'],

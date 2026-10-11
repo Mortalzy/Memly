@@ -11,6 +11,8 @@ import { Study } from '../pages/Study';
 import { Editor } from '../pages/Editor';
 import { Settings } from '../pages/Settings';
 import { Games } from '../pages/Games';
+import { ScanwordLevels } from '../pages/ScanwordLevels';
+import { Scanword } from '../pages/Scanword';
 import { Modal } from '../shared/Modal';
 import { Icon } from '../shared/ui';
 import { ru } from '../shared/ru';
@@ -106,7 +108,9 @@ export function Workspace({ backend }: { backend?: Backend }) {
     openDeck(deck.id);
   };
   const activePage =
-    route.page === 'study' && route.mode === 'scanword'
+    route.page === 'scanword-levels' ||
+    route.page === 'scanword-level' ||
+    (route.page === 'study' && route.mode === 'scanword')
       ? 'games'
       : ['deck', 'study', 'create', 'edit', 'folder'].includes(route.page)
         ? 'library'
@@ -170,12 +174,24 @@ export function Workspace({ backend }: { backend?: Backend }) {
         }
       />
     );
-  else if (route.page === 'games')
+  else if (route.page === 'games') content = <Games openLevels={() => go('games/scanword')} />;
+  else if (route.page === 'scanword-levels')
     content = (
-      <Games
-        decks={decks}
-        play={(id) => startStudy(id, 'scanword')}
-        library={() => go('library')}
+      <ScanwordLevels
+        live={Boolean(backend)}
+        back={() => go('games')}
+        play={(id) => go(`games/scanword/${id}`)}
+      />
+    );
+  else if (route.page === 'scanword-level')
+    content = (
+      <Scanword
+        key={`${route.id}-${route.session ?? ''}`}
+        levelId={route.id}
+        saved={backend?.studySaved}
+        sessionId={route.session}
+        back={() => go('games/scanword')}
+        nextLevel={(id) => go(`games/scanword/${id}`)}
       />
     );
   else if (route.page === 'progress')
@@ -183,7 +199,14 @@ export function Workspace({ backend }: { backend?: Backend }) {
       <Progress
         live={Boolean(backend)}
         openSession={
-          backend ? (item) => go(`study/${item.deckId}/${item.mode}?session=${item.id}`) : undefined
+          backend
+            ? (item) =>
+                go(
+                  item.levelId
+                    ? `games/scanword/${item.levelId}?session=${item.id}`
+                    : `study/${item.deckId}/${item.mode}?session=${item.id}`,
+                )
+            : undefined
         }
       />
     );
@@ -234,7 +257,7 @@ export function Workspace({ backend }: { backend?: Backend }) {
         key={`${route.id}-${route.mode}-${route.session ?? ''}`}
         deck={selectedDeck}
         mode={route.mode}
-        back={() => (route.mode === 'scanword' ? go('games') : openDeck(selectedDeck.id))}
+        back={() => (route.mode === 'scanword' ? go('games/scanword') : openDeck(selectedDeck.id))}
         changeMode={(mode) => startStudy(selectedDeck.id, mode)}
         saved={backend?.studySaved}
         sessionId={route.session}

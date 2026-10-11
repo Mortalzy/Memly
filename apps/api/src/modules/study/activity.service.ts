@@ -1,6 +1,8 @@
 import { Prisma, type PrismaClient } from '@memly/database';
 import type { ActivityQuery, StudyActivity, StudyMode, StudySummary } from '@memly/contracts';
 import { activityTotals, calendarDate, shiftDate, type ActivityCount } from './activity.ts';
+import { SCANWORD_LEVELS, type ScanwordLevelId } from '@memly/contracts';
+import { sessionAccess } from './sessions.service.ts';
 
 export function createActivityService(db: PrismaClient) {
   return {
@@ -14,10 +16,11 @@ export function createActivityService(db: PrismaClient) {
           db.$queryRaw<ActivityCount[]>(Prisma.sql`
           SELECT (s.completed_at AT TIME ZONE ${query.timeZone})::date::text AS date,
             s.mode, COUNT(*)::integer AS completed
-          FROM study_sessions s JOIN decks d ON d.id = s.deck_id
+          FROM study_sessions s LEFT JOIN decks d ON d.id = s.deck_id
           WHERE s.user_id = ${userId} AND s.status = 'completed'
             AND s.completed_at <= ${now}
-            AND (d.owner_id = ${userId} OR d.visibility = 'public')
+            AND (d.owner_id = ${userId} OR d.visibility = 'public'
+              OR (s.deck_id IS NULL AND s.mode = 'scanword' AND s.level_key IN (${Prisma.join(SCANWORD_LEVELS.map((level) => level.id))})))
             ${query.mode ? Prisma.sql`AND s.mode = ${query.mode}` : Prisma.empty}
           GROUP BY 1, 2
         `),
@@ -26,12 +29,13 @@ export function createActivityService(db: PrismaClient) {
               userId,
               status: 'completed',
               completedAt: { lte: now },
-              deck: { OR: [{ ownerId: userId }, { visibility: 'public' }] },
+              ...sessionAccess(userId),
               ...(query.mode ? { mode: query.mode } : {}),
             },
             select: {
               id: true,
               deckId: true,
+              levelKey: true,
               deckTitle: true,
               mode: true,
               startedAt: true,
@@ -52,6 +56,7 @@ export function createActivityService(db: PrismaClient) {
           .map((row) => ({
             id: row.id,
             deckId: row.deckId,
+            levelId: row.levelKey as ScanwordLevelId | null,
             deckTitle: row.deckTitle,
             mode: row.mode as StudyMode,
             status: 'completed',

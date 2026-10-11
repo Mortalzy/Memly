@@ -1,13 +1,22 @@
+import { scanwordLevelIdSchema, type ScanwordLevelId } from '@memly/contracts';
 import type { StudyMode } from '../entities/deck.ts';
 
 export type Route =
   | { page: 'home' | 'library' | 'folders' | 'progress' | 'games' | 'create' | 'settings' }
+  | { page: 'scanword-levels' }
+  | { page: 'scanword-level'; id: ScanwordLevelId; session?: string }
   | { page: 'deck' | 'edit' | 'folder'; id: string }
   | { page: 'study'; id: string; mode: StudyMode; session?: string };
 export function parseRoute(hash: string): Route {
   const [path, query] = hash.replace(/^#\/?/, '').split('?');
   const [page, id, mode] = path.split('/');
   const session = new URLSearchParams(query).get('session');
+  if (page === 'games' && id === 'scanword') {
+    const level = scanwordLevelIdSchema.safeParse(mode);
+    return level.success
+      ? { page: 'scanword-level', id: level.data, ...(session ? { session } : {}) }
+      : { page: 'scanword-levels' };
+  }
   if (page === 'study' && id && ['cards', 'learn', 'test', 'match', 'scanword'].includes(mode))
     return { page, id, mode: mode as StudyMode, ...(session ? { session } : {}) };
   if ((page === 'deck' || page === 'edit' || page === 'folder') && id) return { page, id };

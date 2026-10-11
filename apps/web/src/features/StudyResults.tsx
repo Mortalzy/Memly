@@ -9,11 +9,13 @@ export function StudyResults({
   pending,
   onStart,
   onSetup,
+  readOnly = false,
 }: {
   session: StudySessionDto;
   pending: boolean;
   onStart: (cardIds?: string[]) => void | Promise<void>;
   onSetup: () => void;
+  readOnly?: boolean;
 }) {
   const mode = session.mode;
   const total = session.summary.total;
@@ -59,40 +61,42 @@ export function StudyResults({
             </>
           )}
         </p>
-        <div className="study-actions">
-          <button
-            className="primary"
-            disabled={pending}
-            onClick={() =>
-              void onStart(
-                session.results.length && !session.outdated
-                  ? session.results.map((row) => row.cardId)
-                  : undefined,
-              )
-            }
-          >
-            {text.again}
-          </button>
-          {session.results.some((row) => row.mistakes || row.hints || !row.correct) &&
-            !session.outdated && (
-              <button
-                className="secondary"
-                disabled={pending}
-                onClick={() =>
-                  void onStart(
-                    session.results
-                      .filter((row) => row.mistakes || row.hints || !row.correct)
-                      .map((row) => row.cardId),
-                  )
-                }
-              >
-                {text.repeatMistakes}
-              </button>
-            )}
-          <button className="secondary" onClick={() => onSetup()}>
-            {text.setup}
-          </button>
-        </div>
+        {!readOnly && (
+          <div className="study-actions">
+            <button
+              className="primary"
+              disabled={pending}
+              onClick={() =>
+                void onStart(
+                  session.results.length && !session.outdated
+                    ? session.results.map((row) => row.cardId)
+                    : undefined,
+                )
+              }
+            >
+              {text.again}
+            </button>
+            {session.results.some((row) => row.mistakes || row.hints || !row.correct) &&
+              !session.outdated && (
+                <button
+                  className="secondary"
+                  disabled={pending}
+                  onClick={() =>
+                    void onStart(
+                      session.results
+                        .filter((row) => row.mistakes || row.hints || !row.correct)
+                        .map((row) => row.cardId),
+                    )
+                  }
+                >
+                  {text.repeatMistakes}
+                </button>
+              )}
+            <button className="secondary" onClick={() => onSetup()}>
+              {text.setup}
+            </button>
+          </div>
+        )}
       </section>
       {session.results.length > 0 && (
         <section className="panel study-results">

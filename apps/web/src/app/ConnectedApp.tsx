@@ -77,7 +77,8 @@ function ConnectedWorkspace({ user, signedOut }: { user: UserDto; signedOut: () 
     queryKey: ['progress'],
     queryFn: () => api<ProgressDto>('/v1/study/progress'),
   });
-  const id = 'id' in route && route.page !== 'folder' ? route.id : '';
+  const id =
+    route.page === 'deck' || route.page === 'edit' || route.page === 'study' ? route.id : '';
   const detail = useQuery({
     queryKey: ['deck', id],
     enabled: Boolean(id),

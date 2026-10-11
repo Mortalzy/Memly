@@ -33,6 +33,8 @@ test(
     const address = smtp.server.address();
     assert.ok(address && typeof address !== 'string');
     const db = createDatabase(url);
+    // Suites share memly_test and run sequentially; reset auth counters between suites.
+    await db.rateLimit.deleteMany();
     const email = `${randomUUID()}@mail.memly.test`;
     t.after(async () => {
       await db.user.deleteMany({ where: { email } });

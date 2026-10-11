@@ -6,9 +6,20 @@ import type {
   StudySessionDto,
   StudyActivity,
   ActivityQuery,
+  ScanwordLevelId,
+  StartScanwordLevelInput,
+  ScanwordLevelsDto,
 } from '@memly/contracts';
 import { api } from '../shared/api';
 export const studyClient = {
+  levels: (signal?: AbortSignal) => api<ScanwordLevelsDto>('/v1/games/scanword/levels', { signal }),
+  activeLevel: (levelId: ScanwordLevelId, signal?: AbortSignal) =>
+    api<StudySessionDto | null>(`/v1/games/scanword/levels/${levelId}/active`, { signal }),
+  startLevel: (levelId: ScanwordLevelId, input: StartScanwordLevelInput) =>
+    api<StudySessionDto>(`/v1/games/scanword/levels/${levelId}/sessions`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
   activity: (query: ActivityQuery, signal?: AbortSignal) => {
     const params = new URLSearchParams({ days: String(query.days), timeZone: query.timeZone });
     if (query.mode) params.set('mode', query.mode);
