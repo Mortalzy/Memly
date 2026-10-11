@@ -7,6 +7,10 @@ for (const key of ['window', 'document', 'HTMLElement', 'Event', 'MouseEvent'])
   Object.defineProperty(globalThis, key, { value: dom.window[key], configurable: true });
 Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator, configurable: true });
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+globalThis.ResizeObserver = class {
+  observe() {}
+  disconnect() {}
+};
 const { render, screen, fireEvent, cleanup, act } = await import('@testing-library/react');
 const { createElement } = await import('react');
 const { SpeechButton } = await import('../src/shared/SpeechButton.tsx');

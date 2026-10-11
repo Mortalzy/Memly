@@ -1,7 +1,7 @@
 import { Check } from 'lucide-react';
 import type { StudySessionDto } from '@memly/contracts';
 import { cardCount } from '../shared/ru';
-import { studyText as text, studyDuration } from '../shared/study-text';
+import { studyText as text, studyDuration, matchDuration } from '../shared/study-text';
 import { SpeechButton } from '../shared/SpeechButton';
 import { scanwordText } from '../shared/scanword-text';
 export function StudyResults({
@@ -19,6 +19,7 @@ export function StudyResults({
 }) {
   const mode = session.mode;
   const total = session.summary.total;
+  const reviewOnly = mode === 'cards' && session.options.cardSorting === false;
   return (
     <>
       <section className="panel result-panel">
@@ -27,26 +28,46 @@ export function StudyResults({
         </span>
         <h2>{session.status === 'completed' ? text.result : text.abandoned}</h2>
         <span className="eyebrow">
-          {mode === 'scanword'
-            ? scanwordText.independent
-            : mode === 'learn'
-              ? text.firstPass
-              : mode === 'cards'
-                ? text.known
-                : mode === 'match'
-                  ? text.matched
-                  : text.correctCount}
+          {reviewOnly
+            ? text.reviewed
+            : mode === 'scanword'
+              ? scanwordText.independent
+              : mode === 'learn'
+                ? text.firstPass
+                : mode === 'cards'
+                  ? text.known
+                  : mode === 'match'
+                    ? text.matchClock
+                    : text.correctCount}
         </span>
         <div className="result-score">
-          {session.summary.score}
-          <span>%</span>
+          {reviewOnly ? (
+            `${session.summary.answered} / ${total}`
+          ) : mode === 'match' ? (
+            matchDuration(session.elapsedMs)
+          ) : (
+            <>
+              {session.summary.score}
+              <span>%</span>
+            </>
+          )}
         </div>
         <p>
-          {session.summary.correct} / {total} · {text.mistakes}: {session.summary.mistakes} ·{' '}
-          {text.attempts}: {session.summary.attempts}
-          <br />
-          {text.mastered}: {cardCount(session.summary.mastered)}
-          <br />
+          {!reviewOnly && (
+            <>
+              {session.summary.correct} / {total} · {text.mistakes}: {session.summary.mistakes} ·{' '}
+              {text.attempts}: {session.summary.attempts}
+              <br />
+              {text.mastered}: {cardCount(session.summary.mastered)}
+              <br />
+            </>
+          )}
+          {mode === 'match' && (
+            <>
+              {text.penalty}: {matchDuration(session.penaltyMs ?? 0)}
+              <br />
+            </>
+          )}
           {text.elapsed}: {studyDuration(session.elapsedMs)}
           {mode === 'scanword' && (
             <>
@@ -57,7 +78,8 @@ export function StudyResults({
           {session.bestMs !== null && (
             <>
               <br />
-              {text.best}: {studyDuration(session.bestMs)}
+              {text.best}:{' '}
+              {mode === 'match' ? matchDuration(session.bestMs) : studyDuration(session.bestMs)}
             </>
           )}
         </p>
@@ -68,7 +90,7 @@ export function StudyResults({
               disabled={pending}
               onClick={() =>
                 void onStart(
-                  session.results.length && !session.outdated
+                  mode !== 'match' && session.results.length && !session.outdated
                     ? session.results.map((row) => row.cardId)
                     : undefined,
                 )
@@ -76,7 +98,8 @@ export function StudyResults({
             >
               {text.again}
             </button>
-            {session.results.some((row) => row.mistakes || row.hints || !row.correct) &&
+            {!reviewOnly &&
+              session.results.some((row) => row.mistakes || row.hints || !row.correct) &&
               !session.outdated && (
                 <button
                   className="secondary"
@@ -92,6 +115,11 @@ export function StudyResults({
                   {text.repeatMistakes}
                 </button>
               )}
+            {mode === 'test' && (
+              <button className="secondary" onClick={() => window.print()}>
+                {text.print}
+              </button>
+            )}
             <button className="secondary" onClick={() => onSetup()}>
               {text.setup}
             </button>
@@ -104,7 +132,11 @@ export function StudyResults({
           {session.results.map((row) => (
             <article
               key={row.cardId}
-              className={row.mistakes || row.hints || !row.correct ? 'study-result-error' : ''}
+              className={
+                !reviewOnly && (row.mistakes || row.hints || !row.correct)
+                  ? 'study-result-error'
+                  : ''
+              }
             >
               <div className="spoken-heading">
                 <strong>{row.prompt}</strong>
@@ -114,15 +146,17 @@ export function StudyResults({
                 {text.expected}: {row.expected}
                 <SpeechButton text={row.expected} />
               </p>
-              <p>
-                {text.yourAnswer}: {row.answer || '—'} · {text.mistakes}: {row.mistakes}
-                {mode === 'scanword' && (
-                  <>
-                    {' '}
-                    · {scanwordText.hints}: {row.hints ?? 0}
-                  </>
-                )}
-              </p>
+              {!reviewOnly && (
+                <p>
+                  {text.yourAnswer}: {row.answer || '—'} · {text.mistakes}: {row.mistakes}
+                  {mode === 'scanword' && (
+                    <>
+                      {' '}
+                      · {scanwordText.hints}: {row.hints ?? 0}
+                    </>
+                  )}
+                </p>
+              )}
             </article>
           ))}
         </section>

@@ -73,7 +73,7 @@ export const speech = {
       }
     }
   },
-  play(owner: string, value: string, language = speechLanguage(value)): void {
+  play(owner: string, value: string, language = speechLanguage(value), rate = 1): void {
     speech.stop();
     if (!value.trim()) return;
     if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) {
@@ -89,6 +89,7 @@ export const speech = {
       const startAttempt = (selectedVoice?: SpeechSynthesisVoice): void => {
         const utterance = new window.SpeechSynthesisUtterance(value.trim());
         utterance.lang = language;
+        utterance.rate = rate;
         if (selectedVoice) utterance.voice = selectedVoice;
         active = utterance;
         synthesis = synth;

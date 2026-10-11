@@ -58,6 +58,7 @@ export interface UserDto {
   email: string;
 }
 export interface CardDto {
+  starred?: boolean;
   id: string;
   term: string;
   definition: string;

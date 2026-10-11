@@ -147,16 +147,24 @@ Auth сохраняет собственный контракт ошибок Bet
 ```
 
 Новый запуск из набора: mode cards/learn/test/match; direction: forward/reverse; answerType: choice/written/mixed;
-count: 1–500 (ограничивается доступным объёмом), filter: all/learning. Для повторения
+count: 1–500 (ограничивается доступным объёмом), filter: all/learning/starred. Для повторения
 конкретных карточек можно передать cardIds (1–500 уникальных UUID из того же набора).
 Новый запуск того же режима/набора закрывает прежнее активное как abandoned.
 
+Новые optional-настройки: cardSorting boolean; learnMethod learn/write/spell; retype boolean;
+audioSpeed 0.7/1; grading strict/typos; singleAnswer boolean; testTypes — непустой список
+written/choice/truefalse/matching; matchGame boolean (до 6 пар и штрафы). Без этих полей
+сохраняются прежние правила снимка. DTO включает penaltyMs, learning (familiar/mastered/
+total/streak), summary.reviewed; current может содержать starred и audio только в диктанте.
+Истинность truefalse, ожидаемые ответы и внутренние индексы в незавершённом тесте скрыты.
+
 Действие: `{eventId, revision, action}`. action:
 
-- cards: `{type:'navigate', index}` или `{type:'rate', questionId, known}`;
-- learn: `{type:'answer', questionId, value}`, затем `{type:'next'}` для обратной связи;
+- cards: `{type:'navigate', index}`, `{type:'rate', questionId, known}`, `{type:'review', questionId}` без сортировки либо `{type:'shuffle'}`;
+- learn: `{type:'answer', questionId, value}` / `{type:'skip', questionId}`, затем `{type:'next'}`; при ошибке `{type:'retype', value}` или разрешённый `{type:'override'}`;
 - test: `{type:'test', finish:false|true, answers:[{questionId,value}]}`;
-- match: `{type:'pair', left, right}` с ID плиток из текущей доски;
+- match: `{type:'pair', left, right}` с ID плиток из текущей доски; в matchGame `{type:'mismatch', first, second}` для двух разных свободных плиток одной стороны;
+- cards/learn: `{type:'star', questionId, starred}` — личная звёздочка без учебной оценки;
 - scanword: `{type:'scanword-draft', round, cells:[{key,value}]}` — полный снимок
   заполненных клеток текущего раунда; отсутствие незаблокированной клетки очищает её;
 - scanword: `{type:'scanword-check', round, cells:[{key,value}]}` — сохранение того же
@@ -166,7 +174,7 @@ count: 1–500 (ограничивается доступным объёмом),
 - любой режим: `{type:'abandon'}`.
 
 В choice value — ID предложенного варианта; в written — текст. Пустой value допускается
-в черновике теста, но перед завершением нужно ответить на все вопросы. Неизвестные
+в черновике теста. Завершение с пропусками требует allowUnanswered=true; пропуск оценивается как ошибка. В truefalse value — true/false как строка, в matching — ID варианта из группы. Неизвестные
 вопросы, плитки, повторные пары и чужие карточки отклоняются. Один eventId с другим
 payload — 409; устаревшая revision — 409. Идентичный повтор возвращает актуальное
 состояние без повторного счёта. После завершения новые действия запрещены.
@@ -175,7 +183,7 @@ DTO содержит настройки, статус, summary, current/question
 Тест до сдачи не возвращает правильные ответы или results. После сдачи results содержит
 ответ, эталон, правильность и число ошибок каждой карточки. Сводка заучивания показывает
 правильные первые попытки и освоенные ступени; подбор — найденные пары и отдельный счётчик
-ошибок. elapsedMs — серверное время с паузами, bestMs — личный рекорд подбора для одинакового
+ошибок. elapsedMs — серверное время с паузами и штрафами matchGame, bestMs — личный рекорд подбора для одинакового
 набора/ревизии/направления/объёма. days в overview: 1–366, период — последние days×24 часа.
 
 Правка набора не меняет снимок занятия, но outdated=true предупреждает об изменении.

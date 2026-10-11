@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import request from 'supertest';
 import { pino } from 'pino';
 import { createDatabase } from '@memly/database';
-import type { StudyAction, StudySessionDto } from '@memly/contracts';
+import type { StudyAction, StudySessionDto, StudyOptions } from '@memly/contracts';
 import { createApp } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
 import { calendarDate, shiftDate } from '../src/modules/study/activity.ts';
@@ -51,7 +51,7 @@ test('server study sessions with PostgreSQL', { skip: !databaseUrl }, async (t) 
       cards: Array.from({ length: 7 }, (_, i) => ({ term: `Word${i}`, definition: `Перевод${i}` })),
     }).expect(201)
   ).body;
-  const base = {
+  const base: { deckId: string; options: StudyOptions } = {
     deckId: deck.id as string,
     options: {
       count: 7,
@@ -195,6 +195,121 @@ test('server study sessions with PostgreSQL', { skip: !databaseUrl }, async (t) 
     assert.equal(overview.body.history[0].id, session.id);
     assert.equal((await bob.get('/api/v1/study/overview')).body.completed, 0);
   });
+  await t.test(
+    'stars persist per user without reviews; starred filters and normal reviews respect permissions',
+    async () => {
+      let session = await start('cards', { ...base.options, count: 2, cardSorting: false });
+      const reviews = await db.reviewEvent.count({ where: { userId } });
+      session = await act(session, {
+        type: 'star',
+        questionId: session.current!.id,
+        starred: true,
+      });
+      assert.equal(session.current!.starred, true);
+      assert.equal(await db.reviewEvent.count({ where: { userId } }), reviews);
+      assert.equal((await alice.get(`/api/v1/decks/${deck.id}`)).body.cards[0].starred, true);
+      await post(bob, `/study/sessions/${session.id}/events`, {
+        eventId: randomUUID(),
+        revision: session.revision,
+        action: { type: 'star', questionId: session.current!.id, starred: false },
+      }).expect(404);
+      const filtered = await start('test', { ...base.options, filter: 'starred' });
+      assert.equal(filtered.questions.length, 1);
+      session = await act(session, { type: 'review', questionId: session.current!.id });
+      const restored = (await alice.get(`/api/v1/study/sessions/${session.id}`).expect(200))
+        .body as StudySessionDto;
+      assert.equal(restored.summary.reviewed, 1);
+      session = await act(restored, { type: 'review', questionId: restored.current!.id });
+      assert.equal(session.status, 'completed');
+      assert.equal(session.summary.mastered, 0);
+      assert.equal(await db.reviewEvent.count({ where: { userId } }), reviews);
+      let other = await start('cards', { ...base.options, count: 1, cardSorting: false });
+      other = await act(other, { type: 'star', questionId: other.current!.id, starred: false });
+      assert.equal(
+        (await alice.get(`/api/v1/study/sessions/${session.id}`)).body.questions[0].starred,
+        false,
+      );
+      await post(alice, '/study/sessions', {
+        ...base,
+        mode: 'learn',
+        options: { ...base.options, filter: 'starred' },
+        requestId: randomUUID(),
+      }).expect(400);
+    },
+  );
+  await t.test(
+    'write corrections restore safely, reject invalid copies, and overrides update mastery once',
+    async () => {
+      let session = await start('learn', {
+        ...base.options,
+        count: 1,
+        learnMethod: 'write',
+        retype: true,
+        grading: 'strict',
+      });
+      session = await act(session, { type: 'skip', questionId: session.current!.id });
+      assert.equal(
+        (await alice.get(`/api/v1/study/sessions/${session.id}`)).body.feedback.retypeRequired,
+        true,
+      );
+      await post(alice, `/study/sessions/${session.id}/events`, {
+        revision: session.revision,
+        eventId: randomUUID(),
+        action: { type: 'retype', value: 'still wrong' },
+      }).expect(400);
+      assert.equal(
+        (await alice.get(`/api/v1/study/sessions/${session.id}`)).body.revision,
+        session.revision,
+      );
+      const reviews = await db.reviewEvent.count({ where: { userId } });
+      session = await act(session, { type: 'retype', value: 'Перевод0' });
+      assert.equal(await db.reviewEvent.count({ where: { userId } }), reviews);
+      session = await act(session, { type: 'next' });
+      session = await act(session, {
+        type: 'answer',
+        questionId: session.current!.id,
+        value: 'Перевод0',
+      });
+      session = await act(session, { type: 'next' });
+      session = await act(session, {
+        type: 'answer',
+        questionId: session.current!.id,
+        value: 'ПереводO',
+      });
+      const eventId = randomUUID();
+      const previous = session;
+      session = await act(session, { type: 'override' }, eventId);
+      assert.equal(session.status, 'completed');
+      assert.equal(session.summary.mastered, 1);
+      const count = await db.reviewEvent.count({ where: { userId } });
+      const replay = await act(previous, { type: 'override' }, eventId);
+      assert.equal(replay.revision, session.revision);
+      assert.equal(await db.reviewEvent.count({ where: { userId } }), count);
+    },
+  );
+  await t.test(
+    'six-pair game persists penalties and stores the penalized personal record idempotently',
+    async () => {
+      let session = await start('match', { ...base.options, matchGame: true });
+      assert.equal(session.summary.total, 6);
+      assert.equal(session.board!.rounds, 1);
+      const prior = session;
+      const wrong: StudyAction = { type: 'pair', left: 'l-0-0', right: 'r-0-1' };
+      const eventId = randomUUID();
+      session = await act(session, wrong, eventId);
+      assert.equal((await act(prior, wrong, eventId)).penaltyMs, 1000);
+      assert.equal((await alice.get(`/api/v1/study/sessions/${session.id}`)).body.penaltyMs, 1000);
+      for (let i = 0; i < 6; i++)
+        session = await act(session, { type: 'pair', left: `l-0-${i}`, right: `r-0-${i}` });
+      assert.equal(session.status, 'completed');
+      assert.ok(session.elapsedMs >= 1000);
+      assert.equal(session.bestMs, session.elapsedMs);
+      assert.equal(
+        (await db.studySession.findUniqueOrThrow({ where: { id: session.id } })).elapsedMs,
+        session.elapsedMs,
+      );
+    },
+  );
   await t.test(
     'snapshot survives edits without overwriting progress of a new revision',
     async () => {

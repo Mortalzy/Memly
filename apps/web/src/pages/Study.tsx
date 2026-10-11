@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, ChevronDown, RotateCcw } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ChevronDown, Star } from 'lucide-react';
 import type {
   StartStudyInput,
   StudyAction,
@@ -10,12 +10,16 @@ import type {
 import type { Deck, StudyMode } from '../entities/deck';
 import { Modes, ProgressBar } from '../shared/ui';
 import { ru } from '../shared/ru';
+import { useId } from 'react';
+import { speech } from '../shared/speech';
 import { SpeechButton } from '../shared/SpeechButton';
-import { studyText as text, studyDuration } from '../shared/study-text';
-import { errorMessage } from '../shared/api';
+import { studyText as text, matchDuration } from '../shared/study-text';
+import { ApiError, errorMessage } from '../shared/api';
 import { studyClient } from '../features/study-client';
 import { QuestionInput } from '../features/StudyQuestionInput';
 import { StudySetup } from '../features/StudySetup';
+import { FlashcardPlayer } from '../features/FlashcardPlayer';
+import { MatchBoard } from '../features/MatchBoard';
 import { StudyResults } from '../features/StudyResults';
 import { PrototypeStudy } from './PrototypeStudy';
 import { Scanword } from './Scanword';
@@ -60,22 +64,35 @@ function SessionStudy({
   saved?: () => Promise<void>;
   sessionId?: string;
 }) {
+  const speechOwner = useId();
   const [session, setSession] = useState<StudySessionDto | null>(null);
   const [resume, setResume] = useState<StudySessionDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const [options, setOptions] = useState<StudyOptions>({
-    direction: 'forward',
+    direction: 'reverse',
+    cardSorting: false,
+    matchGame: true,
+    learnMethod: 'learn',
+    retype: true,
+    grading: 'strict',
+    singleAnswer: false,
+    testTypes: ['written', 'choice', 'truefalse', 'matching'],
     answerType: 'mixed',
     count:
-      mode === 'cards' || mode === 'match' ? deck.cards.length : Math.min(20, deck.cards.length),
+      mode === 'match'
+        ? Math.min(6, deck.cards.length)
+        : mode === 'cards' || mode === 'learn'
+          ? deck.cards.length
+          : Math.min(20, deck.cards.length),
     shuffle: true,
     filter: 'all',
   });
   const [answer, setAnswer] = useState('');
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [flipped, setFlipped] = useState(false);
+  const [confirmSubmit, setConfirmSubmit] = useState(false);
+  const [retyped, setRetyped] = useState('');
   const [menu, setMenu] = useState(false);
   const [selected, setSelected] = useState<{ side: 'left' | 'right'; id: string } | null>(null);
   const [clock, setClock] = useState(0);
@@ -86,12 +103,13 @@ function SessionStudy({
   const savedRef = useRef(saved);
   savedRef.current = saved;
   const blocked = pending || Boolean(retryEvent.current);
-  const accept = (value: StudySessionDto, restoreDrafts = true) => {
+  const accept = (value: StudySessionDto, restoreDrafts = true, preserveAnswer = false) => {
     receivedAt.current = Date.now();
     setSession(value);
     setOptions(value.options);
-    setFlipped(false);
-    setAnswer('');
+    setRetyped('');
+    setConfirmSubmit(false);
+    if (!preserveAnswer) setAnswer('');
     setSelected(null);
     if (restoreDrafts) setDrafts(value.drafts);
   };
@@ -134,11 +152,18 @@ function SessionStudy({
     try {
       const value = await studyClient.event(session.id, input);
       retryEvent.current = null;
-      accept(value);
+      accept(value, true, input.action.type === 'star');
       if (value.status !== 'active')
         void savedRef.current?.().catch((error) => setError(errorMessage(error)));
       return value;
     } catch (error) {
+      if (
+        error instanceof ApiError &&
+        error.status >= 400 &&
+        error.status < 500 &&
+        error.status !== 409
+      )
+        retryEvent.current = null;
       setError(errorMessage(error));
       return null;
     } finally {
@@ -167,6 +192,9 @@ function SessionStudy({
     setError('');
     const settings = {
       ...options,
+      ...(mode === 'match' && options.matchGame && !cardIds
+        ? { count: Math.min(6, deck.cards.length) }
+        : {}),
       ...(cardIds ? { count: cardIds.length, filter: 'all' as const } : {}),
     };
     const input = retryStart.current ?? {
@@ -222,42 +250,70 @@ function SessionStudy({
     return () => window.clearTimeout(timer);
   }, [drafts, session?.revision, pending, error]);
   useEffect(() => {
-    if (mode !== 'cards' || session?.status !== 'active') return;
-    const key = (event: KeyboardEvent) => {
-      if (
-        blocked ||
-        (event.target instanceof HTMLElement &&
-          event.target.closest('button,input,textarea,select'))
-      )
-        return;
-      if (event.code === 'Space') {
-        event.preventDefault();
-        setFlipped((value) => !value);
-      }
-      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-        event.preventDefault();
-        const index =
-          (session.cursor + (event.key === 'ArrowLeft' ? -1 : 1) + session.questions.length) %
-          session.questions.length;
-        void send({ type: 'navigate', index });
-      }
-    };
-    window.addEventListener('keydown', key);
-    return () => window.removeEventListener('keydown', key);
-  }, [mode, session, blocked]);
-  const pair = (side: 'left' | 'right', id: string) => {
+    if (
+      mode !== 'learn' ||
+      session?.status !== 'active' ||
+      !session.feedback?.correct ||
+      blocked ||
+      error
+    )
+      return;
+    const timer = window.setTimeout(() => void send({ type: 'next' }), 1600);
+    return () => window.clearTimeout(timer);
+  }, [session?.revision, blocked, error, mode]);
+  const pair = (
+    side: 'left' | 'right',
+    id: string,
+    from?: { side: 'left' | 'right'; id: string },
+  ) => {
     if (blocked) return;
-    if (!selected || selected.side === side) {
+    const first = from ?? selected;
+    if (!first) {
       setSelected({ side, id });
+      return;
+    }
+    if (first.id === id) {
+      setSelected(null);
+      return;
+    }
+    if (first.side === side) {
+      if (session?.options.matchGame) void send({ type: 'mismatch', first: first.id, second: id });
+      else setSelected({ side, id });
       return;
     }
     void send({
       type: 'pair',
-      left: side === 'left' ? id : selected.id,
-      right: side === 'right' ? id : selected.id,
+      left: side === 'left' ? id : first.id,
+      right: side === 'right' ? id : first.id,
     });
   };
   const q = session?.current;
+  useEffect(() => {
+    if (
+      mode !== 'learn' ||
+      !q?.audio ||
+      session?.feedback ||
+      blocked ||
+      session?.status !== 'active'
+    )
+      return;
+    speech.play(speechOwner, q.audio, undefined, options.audioSpeed ?? 1);
+    return () => speech.stop(speechOwner);
+  }, [q?.id, session?.feedback, blocked, mode, speechOwner]);
+  useEffect(() => {
+    if (mode !== 'learn' || !q || q.type !== 'choice' || session?.feedback || blocked) return;
+    const key = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLElement && event.target.closest('input,textarea,select'))
+        return;
+      const option = q.options[Number(event.key) - 1];
+      if (/^[1-4]$/u.test(event.key) && option) {
+        event.preventDefault();
+        void send({ type: 'answer', questionId: q.id, value: option.id });
+      }
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [q?.id, session?.feedback, blocked, mode]);
   const updateOptions = (next: Partial<StudyOptions>) => {
     retryStart.current = null;
     setOptions((value) => ({ ...value, ...next }));
@@ -276,7 +332,9 @@ function SessionStudy({
       ? session.elapsedMs + Math.max(0, (clock || Date.now()) - receivedAt.current)
       : (session?.elapsedMs ?? 0);
   return (
-    <div className="study-page">
+    <div
+      className={`study-page ${mode === 'match' && session?.status === 'active' && session.options.matchGame ? 'match-active' : ''}`}
+    >
       <div className="study-topbar">
         <button className="back-link" onClick={back}>
           <ArrowLeft size={18} />
@@ -385,84 +443,22 @@ function SessionStudy({
                 </span>
               </div>
               {mode === 'cards' && q && (
-                <>
-                  <div className="flashcard-with-audio">
-                    <button
-                      className={`flashcard ${flipped ? 'flipped' : ''}`}
-                      aria-label={`${ru.flipAria}: ${flipped ? q.back : q.prompt}`}
-                      onClick={() => setFlipped(!flipped)}
-                    >
-                      <div className="flashcard-inner">
-                        <div className="flashcard-face">
-                          <span className="eyebrow">
-                            {options.direction === 'forward' ? ru.term : ru.definition}
-                          </span>
-                          <strong>{q.prompt}</strong>
-                          <span className="flashcard-footer">{ru.flip}</span>
-                        </div>
-                        <div className="flashcard-face flashcard-back">
-                          <strong>{q.back}</strong>
-                          <span className="flashcard-footer">{ru.flip}</span>
-                        </div>
-                      </div>
-                    </button>
-                    <div className="flashcard-audio">
-                      <SpeechButton key={q.id} text={flipped ? (q.back ?? '') : q.prompt} />
-                    </div>
-                  </div>
-                  <div className="card-controls">
-                    <button
-                      className="icon-button outlined"
-                      aria-label={ru.previous}
-                      disabled={blocked}
-                      onClick={() =>
-                        void send({
-                          type: 'navigate',
-                          index:
-                            (session.cursor - 1 + session.questions.length) %
-                            session.questions.length,
-                        })
-                      }
-                    >
-                      <ArrowLeft size={20} />
-                    </button>
-                    <span>
-                      {session.cursor + 1} / {session.questions.length}
-                    </span>
-                    <button
-                      className="icon-button outlined"
-                      aria-label={ru.next}
-                      disabled={blocked}
-                      onClick={() =>
-                        void send({
-                          type: 'navigate',
-                          index: (session.cursor + 1) % session.questions.length,
-                        })
-                      }
-                    >
-                      <ArrowRight size={20} />
-                    </button>
-                  </div>
-                  <div className="review-buttons">
-                    <button
-                      className="secondary"
-                      disabled={blocked}
-                      onClick={() => void send({ type: 'rate', questionId: q.id, known: false })}
-                    >
-                      <RotateCcw size={17} />
-                      {ru.learning}
-                    </button>
-                    <button
-                      className="primary"
-                      disabled={blocked}
-                      onClick={() => void send({ type: 'rate', questionId: q.id, known: true })}
-                    >
-                      <Check size={17} />
-                      {ru.know}
-                    </button>
-                  </div>
-                  <p className="keyboard-hint">{ru.flipHint}</p>
-                </>
+                <FlashcardPlayer session={session} blocked={blocked} send={send} />
+              )}
+              {mode === 'learn' && session.learning && (
+                <div className="learn-progress-groups">
+                  <span>
+                    {text.familiar}: {session.learning.familiar} / {session.learning.total}
+                  </span>
+                  <span>
+                    {text.masteredShort}: {session.learning.mastered} / {session.learning.total}
+                  </span>
+                  {session.learning.streak >= 5 && (
+                    <strong>
+                      {text.streak}: {session.learning.streak}
+                    </strong>
+                  )}
+                </div>
               )}
               {mode === 'learn' &&
                 (session.feedback ? (
@@ -484,9 +480,40 @@ function SessionStudy({
                         <SpeechButton text={session.feedback.expected} />
                       </p>
                     </div>
+                    {session.feedback.retypeRequired && (
+                      <form
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void send({ type: 'retype', value: retyped });
+                        }}
+                      >
+                        <label>
+                          {text.retypePrompt}
+                          <input
+                            value={retyped}
+                            disabled={blocked}
+                            onChange={(event) => setRetyped(event.target.value)}
+                            autoComplete="off"
+                            spellCheck={false}
+                          />
+                        </label>
+                        <button className="secondary" disabled={blocked || !retyped.trim()}>
+                          {text.retypeCheck}
+                        </button>
+                      </form>
+                    )}
+                    {session.feedback.canOverride && (
+                      <button
+                        className="text-button"
+                        disabled={blocked}
+                        onClick={() => void send({ type: 'override' })}
+                      >
+                        {text.override}
+                      </button>
+                    )}
                     <button
                       className="primary"
-                      disabled={blocked}
+                      disabled={blocked || session.feedback.retypeRequired}
                       onClick={() => void send({ type: 'next' })}
                     >
                       {text.next}
@@ -506,15 +533,48 @@ function SessionStudy({
                         {q.type === 'choice' ? text.choice : text.written}
                       </span>
                       <div className="spoken-heading">
-                        <h2>{q.prompt}</h2>
-                        <SpeechButton key={q.id} text={q.prompt} />
+                        <h2>{q.audio ? text.listen : q.prompt}</h2>
+                        <SpeechButton
+                          key={q.id}
+                          text={q.audio ?? q.prompt}
+                          label={q.audio ? text.listenWord : undefined}
+                          rate={options.audioSpeed ?? 1}
+                        />
+                        <button
+                          className="icon-button outlined"
+                          type="button"
+                          disabled={blocked}
+                          aria-label={q.starred ? text.unstar : text.star}
+                          aria-pressed={q.starred ?? false}
+                          onClick={() =>
+                            void send({ type: 'star', questionId: q.id, starred: !q.starred })
+                          }
+                        >
+                          <Star size={18} fill={q.starred ? 'currentColor' : 'none'} />
+                        </button>
                       </div>
                       <QuestionInput
+                        key={q.id}
+                        submit={() =>
+                          void send({ type: 'answer', questionId: q.id, value: answer })
+                        }
                         question={q}
                         value={answer}
-                        change={setAnswer}
+                        change={(value) => {
+                          setAnswer(value);
+                          if (q.type === 'choice')
+                            void send({ type: 'answer', questionId: q.id, value });
+                        }}
                         disabled={blocked}
                       />
+                      <button
+                        type="button"
+                        className="text-button"
+                        disabled={blocked}
+                        onClick={() => void send({ type: 'skip', questionId: q.id })}
+                      >
+                        {text.dontKnow}
+                      </button>
                       <button
                         className="primary study-submit"
                         type="submit"
@@ -539,11 +599,20 @@ function SessionStudy({
                       <section className="panel test-question" key={question.id}>
                         <span className="eyebrow">
                           {ru.question} {index + 1} / {session.questions.length}
+                          {question.matchGroup !== undefined && (
+                            <>
+                              {' '}
+                              · {text.matching} · {text.group} {question.matchGroup}
+                            </>
+                          )}
                         </span>
                         <div className="spoken-heading">
                           <h2>{question.prompt}</h2>
                           <SpeechButton text={question.prompt} />
                         </div>
+                        {question.statement !== undefined && (
+                          <p className="test-statement">{question.statement}</p>
+                        )}
                         <QuestionInput
                           question={question}
                           value={drafts[question.id] ?? ''}
@@ -555,11 +624,46 @@ function SessionStudy({
                       </section>
                     ))}
                   </div>
+                  {confirmSubmit && (
+                    <section className="panel unanswered-prompt" role="alert">
+                      <p>{text.unansweredConfirm}</p>
+                      <div className="study-actions">
+                        <button
+                          className="primary"
+                          disabled={blocked}
+                          onClick={() =>
+                            void send({
+                              type: 'test',
+                              finish: true,
+                              allowUnanswered: true,
+                              answers: Object.entries(drafts).map(([questionId, value]) => ({
+                                questionId,
+                                value,
+                              })),
+                            })
+                          }
+                        >
+                          {text.submitAnyway}
+                        </button>
+                        <button
+                          className="secondary"
+                          disabled={blocked}
+                          onClick={() => setConfirmSubmit(false)}
+                        >
+                          {text.cancel}
+                        </button>
+                      </div>
+                    </section>
+                  )}
                   <div className="test-finish">
                     <button
                       className="primary"
-                      disabled={blocked || session.questions.some((q) => !drafts[q.id]?.trim())}
-                      onClick={() =>
+                      disabled={blocked}
+                      onClick={() => {
+                        if (session.questions.some((q) => !drafts[q.id]?.trim())) {
+                          setConfirmSubmit(true);
+                          return;
+                        }
                         void send({
                           type: 'test',
                           finish: true,
@@ -567,8 +671,8 @@ function SessionStudy({
                             questionId,
                             value,
                           })),
-                        })
-                      }
+                        });
+                      }}
                     >
                       {text.finish}
                     </button>
@@ -583,34 +687,21 @@ function SessionStudy({
                       {total}
                     </span>
                     <span aria-live="off">
-                      {studyDuration(elapsed)} · {text.mistakes}: {session.summary.mistakes}
+                      {matchDuration(elapsed)} · {text.mistakes}: {session.summary.mistakes}
                     </span>
                   </div>
-                  <div className="match-board">
-                    {(['left', 'right'] as const).map((side) => (
-                      <div key={side}>
-                        {session.board![side].map((tile) => (
-                          <div className="match-item" key={tile.id}>
-                            <button
-                              className={`match-tile ${tile.matched ? 'matched' : ''} ${selected?.id === tile.id ? 'selected' : ''}`}
-                              disabled={tile.matched || blocked}
-                              aria-pressed={selected?.id === tile.id}
-                              onClick={() => pair(side, tile.id)}
-                            >
-                              {tile.matched ? <Check size={22} /> : tile.text}
-                            </button>
-                            {!tile.matched && <SpeechButton text={tile.text} disabled={blocked} />}
-                          </div>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
+                  <MatchBoard session={session} blocked={blocked} selected={selected} pair={pair} />
                   {session.feedback && (
                     <p className="match-message" role="status">
                       {session.feedback.correct ? text.pairCorrect : text.pairWrong}
                     </p>
                   )}
-                  <p className="keyboard-hint">{text.clockHint}</p>
+                  <p className="keyboard-hint">
+                    {text.clockHint} {text.penaltyHint}
+                  </p>
+                  <button className="secondary" disabled={blocked} onClick={() => void start()}>
+                    {text.matchRestart}
+                  </button>
                 </>
               )}
               <div className="study-bottom">

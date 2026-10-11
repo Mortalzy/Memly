@@ -3,13 +3,23 @@ import { Square, Volume2 } from 'lucide-react';
 import { speech } from './speech';
 import { speechText } from './speech-text';
 
-export function SpeechButton({ text, disabled = false }: { text: string; disabled?: boolean }) {
+export function SpeechButton({
+  text,
+  disabled = false,
+  label: customLabel,
+  rate = 1,
+}: {
+  text: string;
+  disabled?: boolean;
+  label?: string;
+  rate?: number;
+}) {
   const owner = useId();
   const state = useSyncExternalStore(speech.subscribe, speech.snapshot);
   const playing = state.owner === owner && state.playing;
   const error = state.owner === owner ? state.error : '';
   useEffect(() => () => speech.stop(owner), [owner, text]);
-  const label = playing ? speechText.stop(text) : speechText.play(text);
+  const label = customLabel ?? (playing ? speechText.stop(text) : speechText.play(text));
   return (
     <span className="speech-control">
       <button
@@ -22,7 +32,7 @@ export function SpeechButton({ text, disabled = false }: { text: string; disable
         onClick={(event) => {
           event.stopPropagation();
           if (playing) speech.stop(owner);
-          else speech.play(owner, text);
+          else speech.play(owner, text, undefined, rate);
         }}
       >
         {playing ? (

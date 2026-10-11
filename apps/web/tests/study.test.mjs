@@ -11,6 +11,10 @@ for (const key of ['window', 'document', 'HTMLElement', 'HTMLInputElement', 'Eve
   Object.defineProperty(globalThis, key, { value: dom.window[key], configurable: true });
 Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator, configurable: true });
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+globalThis.ResizeObserver = class {
+  observe() {}
+  disconnect() {}
+};
 const { render, screen, fireEvent, cleanup, waitFor } = await import('@testing-library/react');
 const { createElement } = await import('react');
 const { Study } = await import('../src/pages/Study.tsx');
@@ -75,7 +79,7 @@ beforeEach(() => {
       const input = JSON.parse(options.body);
       inputs.push(input);
       if (!current.events.has(input.eventId)) {
-        current.state = applyStudyAction(current.state, input.action).state;
+        current.state = applyStudyAction(current.state, input.action, () => 0.3).state;
         current.revision++;
         current.events.set(input.eventId, input);
         attempts++;
@@ -133,11 +137,23 @@ async function start(mode) {
     target: { value: 'forward' },
   });
   fireEvent.click(screen.getByRole('checkbox', { name: 'Перемешать карточки' }));
-  if (mode === 'test' || mode === 'learn')
+  if (mode === 'cards')
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Сортировать на «Знаю / Ещё учу»' }));
+  if (mode === 'learn') {
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Повторять правильный ответ после ошибки' }),
+    );
     fireEvent.change(screen.getByRole('combobox', { name: 'Тип вопросов' }), {
       target: { value: 'written' },
     });
-  fireEvent.click(screen.getByRole('button', { name: 'Начать занятие' }));
+  }
+  if (mode === 'test') {
+    for (const name of ['Выбор ответа', 'Верно / неверно', 'Сопоставление'])
+      fireEvent.click(screen.getByRole('checkbox', { name, exact: true }));
+  }
+  fireEvent.click(
+    screen.getByRole('button', { name: mode === 'match' ? 'Начать игру' : 'Начать занятие' }),
+  );
   await waitFor(() =>
     assert.ok(screen.queryByRole('heading', { name: 'Настройте занятие' }) === null),
   );
@@ -260,4 +276,94 @@ test('history shows server results and opens the selected session', async () => 
   assert.equal(opened.id, 'lesson');
   fireEvent.click(screen.getByRole('button', { name: '7 дней' }));
   await screen.findByRole('heading', { name: 'Фрукты · Тест' });
+});
+
+test('default cards finish by unique reviews and stars never rate the card', async () => {
+  await open('cards');
+  fireEvent.change(screen.getByRole('combobox', { name: 'Направление' }), {
+    target: { value: 'forward' },
+  });
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Перемешать карточки' }));
+  await clickReady('Начать занятие');
+  await screen.findByRole('button', { name: 'Перевернуть карточку: Apple' });
+  await clickReady('Добавить звёздочку');
+  await screen.findByRole('button', { name: 'Убрать звёздочку' });
+  assert.equal(current.state.attempts.length, 0);
+  assert.equal(current.state.cards[0].starred, true);
+  await clickReady('Следующая карточка');
+  await screen.findByRole('button', { name: 'Перевернуть карточку: Cherry' });
+  await clickReady('Предыдущая карточка');
+  await screen.findByRole('button', { name: 'Перевернуть карточку: Apple' });
+  await clickReady('Следующая карточка');
+  await screen.findByRole('button', { name: 'Перевернуть карточку: Cherry' });
+  await clickReady('Следующая карточка');
+  await screen.findByRole('heading', { name: 'Занятие завершено' });
+  assert.equal(current.state.viewed.length, 2);
+  assert.ok(screen.getByText('Просмотрено карточек'));
+  assert.equal(screen.queryByRole('button', { name: 'Повторить сложные карточки' }), null);
+});
+test('write mode restores correction, offers an override, and still needs a second independent answer', async () => {
+  await open('learn');
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Перемешать карточки' }));
+  fireEvent.change(screen.getByRole('spinbutton', { name: 'Количество карточек' }), {
+    target: { value: 1 },
+  });
+  fireEvent.change(screen.getByRole('combobox', { name: 'Способ заучивания' }), {
+    target: { value: 'write' },
+  });
+  await clickReady('Начать занятие');
+  await screen.findByRole('button', { name: 'Не знаю' });
+  await clickReady('Не знаю');
+  await screen.findByRole('textbox', { name: 'Напишите правильный ответ ещё раз' });
+  assert.equal(screen.getByRole('button', { name: 'Продолжить', exact: true }).disabled, true);
+  fireEvent.change(screen.getByRole('textbox', { name: 'Напишите правильный ответ ещё раз' }), {
+    target: { value: 'Apple' },
+  });
+  await clickReady('Подтвердить исправление');
+  await clickReady('Продолжить');
+  fireEvent.change(await screen.findByRole('textbox', { name: 'Ваш ответ' }), {
+    target: { value: 'Appl' },
+  });
+  await clickReady('Проверить');
+  await screen.findByRole('button', { name: 'Я ответил верно' });
+  await clickReady('Я ответил верно');
+  await clickReady('Продолжить');
+  fireEvent.change(await screen.findByRole('textbox', { name: 'Ваш ответ' }), {
+    target: { value: 'Apple' },
+  });
+  await clickReady('Проверить');
+  await screen.findByRole('heading', { name: 'Занятие завершено' });
+  assert.equal(studyView(current.state).summary.mastered, 1);
+  assert.equal(current.state.attempts.length, 3);
+});
+test('dictation hides the word from visible content and speech labels before an answer', async () => {
+  await open('learn');
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Перемешать карточки' }));
+  fireEvent.change(screen.getByRole('spinbutton', { name: 'Количество карточек' }), {
+    target: { value: 1 },
+  });
+  fireEvent.change(screen.getByRole('combobox', { name: 'Способ заучивания' }), {
+    target: { value: 'spell' },
+  });
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Медленная озвучка в диктанте' }));
+  await clickReady('Начать занятие');
+  await screen.findByRole('heading', { name: 'Прослушайте слово и напишите его' });
+  assert.ok(screen.getByRole('button', { name: 'Прослушать слово' }));
+  assert.equal(document.body.textContent.includes('Apple'), false);
+  assert.equal(document.body.innerHTML.includes('aria-label="Прослушать: Apple"'), false);
+  assert.equal(current.state.options.audioSpeed, 0.7);
+});
+test('test permits confirmed omissions, grades them as wrong and offers printing', async () => {
+  await open('test');
+  for (const name of ['Письменный ответ', 'Выбор ответа', 'Сопоставление'])
+    fireEvent.click(screen.getByRole('checkbox', { name, exact: true }));
+  await clickReady('Начать занятие');
+  await screen.findAllByRole('button', { name: /Верно|Неверно/ });
+  await clickReady('Завершить тест');
+  await screen.findByText('Остались вопросы без ответа. Сдать тест? Они будут считаться ошибками.');
+  await clickReady('Сдать с пропусками');
+  await screen.findByRole('heading', { name: 'Занятие завершено' });
+  assert.equal(studyView(current.state).summary.score, 0);
+  assert.equal(studyView(current.state).summary.mistakes, 2);
+  assert.ok(screen.getByRole('button', { name: 'Распечатать результат' }));
 });

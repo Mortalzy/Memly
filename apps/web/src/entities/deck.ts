@@ -1,5 +1,6 @@
 export type { StudyMode } from '@memly/contracts';
 export interface Card {
+  starred?: boolean;
   id: string;
   term: string;
   definition: string;

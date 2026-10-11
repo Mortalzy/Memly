@@ -8,7 +8,19 @@ export const studyOptionsSchema = z.strictObject({
   answerType: z.enum(['choice', 'written', 'mixed']).default('mixed'),
   count: z.number().int().min(1).max(500).default(20),
   shuffle: z.boolean().default(true),
-  filter: z.enum(['all', 'learning']).default('all'),
+  filter: z.enum(['all', 'learning', 'starred']).default('all'),
+  cardSorting: z.boolean().optional(),
+  matchGame: z.boolean().optional(),
+  learnMethod: z.enum(['learn', 'write', 'spell']).optional(),
+  retype: z.boolean().optional(),
+  audioSpeed: z.union([z.literal(0.7), z.literal(1)]).optional(),
+  grading: z.enum(['strict', 'typos']).optional(),
+  singleAnswer: z.boolean().optional(),
+  testTypes: z
+    .array(z.enum(['written', 'choice', 'truefalse', 'matching']))
+    .min(1)
+    .max(4)
+    .optional(),
 });
 export const startStudySchema = z.strictObject({
   requestId: z.uuid(),
@@ -30,11 +42,19 @@ export const studyActionSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('rate'), questionId, known: z.boolean() }),
   z.strictObject({ type: z.literal('answer'), questionId, value: z.string().max(5000) }),
   z.strictObject({ type: z.literal('next') }),
+  z.strictObject({ type: z.literal('skip'), questionId }),
+  z.strictObject({ type: z.literal('override') }),
+  z.strictObject({ type: z.literal('retype'), value: z.string().max(5000) }),
+  z.strictObject({ type: z.literal('review'), questionId }),
+  z.strictObject({ type: z.literal('shuffle') }),
+  z.strictObject({ type: z.literal('star'), questionId, starred: z.boolean() }),
   z.strictObject({ type: z.literal('navigate'), index: z.number().int().min(0).max(499) }),
   z.strictObject({ type: z.literal('pair'), left: questionId, right: questionId }),
+  z.strictObject({ type: z.literal('mismatch'), first: questionId, second: questionId }),
   z.strictObject({
     type: z.literal('test'),
     finish: z.boolean(),
+    allowUnanswered: z.boolean().optional(),
     answers: z.array(z.strictObject({ questionId, value: z.string().max(5000) })).max(500),
   }),
   z.strictObject({ type: z.literal('abandon') }),
@@ -53,7 +73,11 @@ export type StudyEventInput = z.infer<typeof studyEventSchema>;
 export interface StudyQuestion {
   id: string;
   prompt: string;
-  type: 'choice' | 'written' | 'card';
+  type: 'choice' | 'written' | 'card' | 'truefalse' | 'matching';
+  statement?: string;
+  matchGroup?: number;
+  audio?: string;
+  starred?: boolean;
   options: { id: string; text: string }[];
   back?: string;
   known?: boolean;
@@ -63,6 +87,8 @@ export interface StudyFeedback {
   expected: string;
   answer: string;
   correct: boolean;
+  canOverride?: boolean;
+  retypeRequired?: boolean;
 }
 export interface StudyResultRow extends StudyFeedback {
   cardId: string;
@@ -78,6 +104,7 @@ export interface StudySummary {
   mastered: number;
   score: number;
   hints?: number;
+  reviewed?: number;
 }
 export interface StudySessionDto {
   id: string;
@@ -107,6 +134,8 @@ export interface StudySessionDto {
   results: StudyResultRow[];
   bestMs: number | null;
   outdated: boolean;
+  penaltyMs?: number;
+  learning?: { familiar: number; mastered: number; total: number; streak: number };
   scanword?: ScanwordBoardDto | null;
 }
 export interface StudyHistoryItem {

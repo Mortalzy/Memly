@@ -5,7 +5,10 @@ import { AppError, conflict, missing } from '../../http/errors.ts';
 type Database = PrismaClient | Prisma.TransactionClient;
 export const deckInclude = (userId: string) => ({
   owner: { select: { name: true } },
-  cards: { orderBy: { position: 'asc' as const }, include: { progress: { where: { userId } } } },
+  cards: {
+    orderBy: { position: 'asc' as const },
+    include: { progress: { where: { userId } }, stars: { where: { userId } } },
+  },
   favorites: { where: { userId } },
 });
 type LoadedDeck = Prisma.DeckGetPayload<{ include: ReturnType<typeof deckInclude> }>;
@@ -29,7 +32,13 @@ export function deckDto(deck: LoadedDeck, userId: string, detail = true): DeckDt
     folder: deck.ownerId === userId ? (deck.folderId ?? '') : '',
     favorite: deck.favorites.length > 0,
     cards: detail
-      ? deck.cards.map(({ id, term, definition, revision }) => ({ id, term, definition, revision }))
+      ? deck.cards.map(({ id, term, definition, revision, stars }) => ({
+          id,
+          term,
+          definition,
+          revision,
+          starred: stars.length > 0,
+        }))
       : [],
   };
 }

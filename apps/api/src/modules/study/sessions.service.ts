@@ -58,7 +58,15 @@ async function owned(db: Database, userId: string, id: string): Promise<Stored> 
   return session;
 }
 async function dto(db: Database, session: Stored): Promise<StudySessionDto> {
-  const state = session.state as unknown as StudyState;
+  const state = structuredClone(session.state) as unknown as StudyState;
+  if (session.deckId && (state.mode === 'cards' || state.mode === 'learn')) {
+    const stars = await db.cardStar.findMany({
+      where: { userId: session.userId, cardId: { in: state.cards.map((card) => card.id) } },
+      select: { cardId: true },
+    });
+    const starred = new Set(stars.map((star) => star.cardId));
+    for (const card of state.cards) card.starred = starred.has(card.id);
+  }
   let bestMs: number | null = null;
   if (session.mode === 'match') {
     const record = await db.studySession.aggregate({
@@ -70,6 +78,9 @@ async function dto(db: Database, session: Stored): Promise<StudySessionDto> {
         status: 'completed',
         cardCount: state.cards.length,
         direction: state.options.direction,
+        ...(state.options.matchGame
+          ? { state: { path: ['options', 'matchGame'], equals: true } }
+          : {}),
       },
       _min: { elapsedMs: true },
     });
@@ -89,7 +100,7 @@ async function dto(db: Database, session: Stored): Promise<StudySessionDto> {
     completedAt: session.completedAt?.toISOString() ?? null,
     elapsedMs:
       session.status === 'active'
-        ? Math.max(0, Date.now() - session.startedAt.getTime())
+        ? Math.max(0, Date.now() - session.startedAt.getTime()) + (studyView(state).penaltyMs ?? 0)
         : session.elapsedMs,
     ...studyView(state),
     bestMs,
@@ -238,12 +249,15 @@ export function createStudySessionService(db: PrismaClient) {
               (card) =>
                 !card.progress.some((row) => row.known && row.cardRevision === card.revision),
             );
+          if (input.options.filter === 'starred')
+            cards = cards.filter((card) => card.stars.length > 0);
           if (!cards.length)
             throw new AppError(400, 'NO_CARDS', 'Нет карточек для выбранного фильтра');
           let state: StudyState;
           try {
             state = createStudyState(
-              cards.map(({ id, term, definition, revision }) => ({
+              cards.map(({ id, term, definition, revision, stars }) => ({
+                starred: stars.length > 0,
                 id,
                 term,
                 definition,
@@ -325,7 +339,11 @@ export function createStudySessionService(db: PrismaClient) {
           if (session.revision !== input.revision) throw conflict();
           let next: ReturnType<typeof applyStudyAction>;
           try {
-            next = applyStudyAction(session.state as unknown as StudyState, input.action);
+            next = applyStudyAction(
+              session.state as unknown as StudyState,
+              input.action,
+              () => randomInt(0, 0x100000000) / 0x100000000,
+            );
           } catch (error) {
             if (error instanceof StudyRuleError)
               throw new AppError(400, 'STUDY_RULE', error.message);
@@ -333,7 +351,8 @@ export function createStudySessionService(db: PrismaClient) {
           }
           const elapsedMs = Math.min(
             2147483647,
-            Math.max(0, Date.now() - session.startedAt.getTime()),
+            Math.max(0, Date.now() - session.startedAt.getTime()) +
+              (studyView(next.state).penaltyMs ?? 0),
           );
           const claim = await tx.studySession.updateMany({
             where: { id, revision: input.revision },
@@ -350,6 +369,20 @@ export function createStudySessionService(db: PrismaClient) {
           await tx.studyEvent.create({
             data: { sessionId: id, eventId: input.eventId, input: json(input) },
           });
+          if (input.action.type === 'star' && session.deckId) {
+            const action = input.action;
+            const q = next.state.questions.find((q) => q.id === action.questionId)!;
+            const card = next.state.cards[q.cardIndex];
+            if (!(await tx.card.findFirst({ where: { id: card.id, deckId: session.deckId } })))
+              throw new AppError(400, 'INVALID_CARD', 'Карточка удалена из набора');
+            if (action.starred)
+              await tx.cardStar.upsert({
+                where: { userId_cardId: { userId, cardId: card.id } },
+                create: { userId, cardId: card.id },
+                update: {},
+              });
+            else await tx.cardStar.deleteMany({ where: { userId, cardId: card.id } });
+          }
           if (next.assessments.length && session.deckId) {
             const current = await tx.card.findMany({
               where: {
