@@ -45,7 +45,10 @@ TTS-сервиса, API-ключей и изменений схемы/API нет
 JSON-парсера, поскольку Better Auth самостоятельно читает поток запроса.
 
 В development Vite проксирует `/api` к Express. Для production нужен единый HTTPS-origin:
-reverse proxy обслуживает `dist` и направляет `/api` к API. PostgreSQL недоступен браузеру.
+Express обслуживает корневой `dist` вместе с `/api`; перед ним допустим reverse proxy
+или туннель ngrok. По умолчанию HOST=127.0.0.1. PostgreSQL недоступен браузеру.
+Личный запуск на Windows 11 описан в [ADR 0010](adr/0010-home-hosting.md)
+и [инструкции](home-hosting.md).
 Этот Express/PostgreSQL backend предназначен для обычного Node-хостинга; опубликованный
 статический дизайн-прототип отдельно и не подменяет полнофункциональное приложение.
 

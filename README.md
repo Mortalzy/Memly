@@ -114,8 +114,12 @@ npm run dev
 `TRUSTED_ORIGINS`. Порт Vite фиксирован: при занятом 5173 процесс завершится с ошибкой.
 
 Отдельно: `npm run dev:api` и `npm run dev:web`. После `npm run build` сервер запускается
-через `npm run start:api`; статический клиент из `dist` должен обслуживаться вместе с
-`/api` через один origin. `npm run preview` показывает только сборку фронтенда, без API.
+через `npm start`; в production Express обслуживает клиент из корневого `dist` вместе с
+`/api` через один origin. По умолчанию сервер слушает `127.0.0.1`; другой адрес задаётся
+переменной `HOST`. `npm run preview` показывает только сборку фронтенда, без API.
+
+Запуск с Windows 11 через ngrok: [пошаговая инструкция](docs/home-hosting.md).
+Команды `npm run tunnel` и `npm run db:backup` читают корневой `.env`.
 
 ## SMTP
 

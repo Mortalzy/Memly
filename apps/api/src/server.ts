@@ -1,4 +1,5 @@
 import { pino } from 'pino';
+import { fileURLToPath } from 'node:url';
 import { createDatabase } from '@memly/database';
 import { loadConfig } from './config.ts';
 import { createApp } from './app.ts';
@@ -7,8 +8,12 @@ const config = loadConfig(process.env);
 const logger = pino({ level: process.env.LOG_LEVEL ?? 'info' });
 const db = createDatabase(config.DATABASE_URL);
 await db.$connect();
-const { app } = createApp(db, config, logger);
-const server = app.listen(config.PORT, '0.0.0.0', () =>
+const webDirectory =
+  config.NODE_ENV === 'production'
+    ? fileURLToPath(new URL('../../../dist/', import.meta.url))
+    : undefined;
+const { app } = createApp(db, config, logger, webDirectory);
+const server = app.listen(config.PORT, config.HOST, () =>
   logger.info({ port: config.PORT }, 'Memly API started'),
 );
 let stopping = false;

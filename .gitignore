@@ -10,6 +10,7 @@ test-results/
 !.env.example
 *.log
 uploads/
+backups/
 .DS_Store
 Thumbs.db
 packages/database/generated/

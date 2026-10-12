@@ -18,7 +18,10 @@
     "db:generate": "npm run generate --workspace=@memly/database",
     "db:migrate": "npm run migrate --workspace=@memly/database",
     "db:migrate:dev": "npm run migrate:dev --workspace=@memly/database --",
-    "start:api": "npm run start --workspace=@memly/api"
+    "start:api": "npm run start --workspace=@memly/api",
+    "start": "npm run start:api",
+    "tunnel": "node --env-file-if-exists=.env scripts/tunnel.mjs",
+    "db:backup": "node --env-file-if-exists=.env scripts/backup.mjs"
   },
   "devDependencies": {
     "prettier": "3.6.2"

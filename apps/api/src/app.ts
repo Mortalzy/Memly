@@ -9,8 +9,9 @@ import type { Config } from './config.ts';
 import { createAuth, requireSession } from './modules/auth/auth.ts';
 import { createRoutes } from './http/routes.ts';
 import { AppError, errorHandler } from './http/errors.ts';
+import { createWebRouter } from './http/web.ts';
 
-export function createApp(db: PrismaClient, config: Config, logger: Logger) {
+export function createApp(db: PrismaClient, config: Config, logger: Logger, webDirectory?: string) {
   const app = express();
   const auth = createAuth(db, config);
   app.disable('x-powered-by');
@@ -82,6 +83,7 @@ export function createApp(db: PrismaClient, config: Config, logger: Logger) {
   app.all('/api/auth/*splat', toNodeHandler(auth));
   app.use(express.json({ limit: '4mb' }));
   app.use('/api/v1', requireSession(auth), createRoutes(db));
+  if (webDirectory) app.use(createWebRouter(webDirectory));
   app.use((_req, _res, next) => next(new AppError(404, 'NOT_FOUND', 'Маршрут не найден')));
   app.use(errorHandler(logger));
   return { app, auth };
