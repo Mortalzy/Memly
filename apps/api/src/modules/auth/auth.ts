@@ -1,22 +1,14 @@
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { fromNodeHeaders } from 'better-auth/node';
-import nodemailer from 'nodemailer';
 import type { RequestHandler } from 'express';
 import type { PrismaClient } from '@memly/database';
 import type { Config } from '../../config.ts';
 import { AppError } from '../../http/errors.ts';
+import { createMailTransport } from './mail.ts';
 
 export function createAuth(db: PrismaClient, config: Config) {
-  const mail = config.smtpEnabled
-    ? nodemailer.createTransport({
-        host: config.SMTP_HOST,
-        port: config.SMTP_PORT,
-        secure: config.SMTP_PORT === 465,
-        requireTLS: config.NODE_ENV === 'production' && config.SMTP_PORT !== 465,
-        auth: config.SMTP_USER ? { user: config.SMTP_USER, pass: config.SMTP_PASSWORD } : undefined,
-      })
-    : null;
+  const mail = config.smtpEnabled ? createMailTransport(config) : null;
   const send = async (email: string, subject: string, text: string) => {
     if (!mail) throw new Error('SMTP is not configured');
     await mail.sendMail({ from: config.SMTP_FROM, to: email, subject, text });

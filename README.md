@@ -121,6 +121,11 @@ npm run dev
 Запуск с Windows 11 через ngrok: [пошаговая инструкция](docs/home-hosting.md).
 Команды `npm run tunnel` и `npm run db:backup` читают корневой `.env`.
 
+Для VPS: [пошаговая инструкция](docs/vps-hosting.md), шаблоны Nginx и systemd в
+`deploy/`. После заполнения production `.env` используйте `npm run build:production`,
+`npm run db:migrate` и `npm run hosting:check`. Последняя команда проверяет БД,
+миграции и SMTP без отправки письма. Само развёртывание на VPS выполняется отдельно.
+
 ## SMTP
 
 Без SMTP в development доступна регистрация без подтверждения почты; восстановление
@@ -137,12 +142,15 @@ production требуют STARTTLS. Для Gmail обычно нужен пар�
 ```bash
 npm run typecheck
 npm run format:check
-npm test
 npm run build
+npm test
+npm run test:hosting
 ```
 
 API-тесты требуют отдельную базу **memly_test**. Они не запускаются без `TEST_DATABASE_URL`
 и явно отмечаются как пропущенные. Не указывайте пользовательскую базу.
+test:hosting требует предварительной сборки и ту же отдельную БД; проверяет настоящий
+production-процесс, статику, вход с Secure cookie и корректную остановку.
 
 В bash, после создания тестовой БД:
 
