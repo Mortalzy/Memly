@@ -4,13 +4,20 @@ const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3001),
   HOST: z.string().min(1).default('127.0.0.1'),
-  DATABASE_URL: z.string().startsWith('postgres'),
+  DATABASE_URL: z.url().refine((value) => {
+    const url = new URL(value);
+    return (
+      ['postgres:', 'postgresql:'].includes(url.protocol) &&
+      Boolean(url.hostname) &&
+      url.pathname.length > 1
+    );
+  }, 'Укажите PostgreSQL URL с именем базы'),
   BETTER_AUTH_URL: z.url(),
   BETTER_AUTH_SECRET: z.string().min(32),
   TRUSTED_ORIGINS: z.string().min(1),
   TRUST_PROXY: z.enum(['0', '1']).default('0'),
   SMTP_HOST: z.string().optional(),
-  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
   SMTP_FROM: z.string().optional(),
@@ -25,8 +32,22 @@ export function loadConfig(env: NodeJS.ProcessEnv) {
     }
     return url.origin;
   });
+  const authUrl = new URL(config.BETTER_AUTH_URL);
+  if (
+    !['http:', 'https:'].includes(authUrl.protocol) ||
+    authUrl.username ||
+    authUrl.password ||
+    authUrl.search ||
+    authUrl.hash ||
+    authUrl.pathname !== '/' ||
+    !origins.includes(authUrl.origin)
+  ) {
+    throw new Error('BETTER_AUTH_URL должен быть корневым HTTP(S) адресом из TRUSTED_ORIGINS');
+  }
   const smtpEnabled = Boolean(config.SMTP_HOST && config.SMTP_FROM);
-  if (config.SMTP_HOST && !config.SMTP_FROM) throw new Error('Укажите SMTP_FROM');
+  if (Boolean(config.SMTP_HOST) !== Boolean(config.SMTP_FROM)) {
+    throw new Error('Укажите SMTP_HOST и SMTP_FROM вместе');
+  }
   if (Boolean(config.SMTP_USER) !== Boolean(config.SMTP_PASSWORD)) {
     throw new Error('Укажите SMTP_USER и SMTP_PASSWORD вместе');
   }
